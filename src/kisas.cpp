@@ -23,6 +23,7 @@
 #include "pindefs.h"
 #include "ADE7880RegisterNames.h"
 #include "ADE7880.h"
+#include "ADE7880Settings.h"
 #include "utils.h"
 
 #include "Applications.h"
@@ -93,11 +94,17 @@ void incrementNumStr(char * str) {
  * Initialisation routine
  */
 uint32_t reg32;
+int32_t reg32s;
 uint16_t reg16;
+
+float instantaneous[7] = { 0 };
+float Va = 0;
+int32_t instantaneousHex[7] = { 0x0 };
+
 bool commValid;
 uint32_t selectStateCount = 0;
-uint8_t tx_buffer[64];
-uint8_t rx_buffer[64];
+uint8_t tx_buffer[64] = { 0 };
+uint8_t rx_buffer[64] = { 0 };
 
 
 #pragma GCC push_options
@@ -105,21 +112,75 @@ uint8_t rx_buffer[64];
 void setup()
 {
 	ade7880->Begin();
-	commValid = ade7880->regRead32(CHECKSUM, reg32);
 
-	while(selectStateCount < 8000) {
-		if( ADE7880::selectState ) {
-			ADE7880::selectState = false;
-			selectStateCount++;
+	/* Configure HSDC (See table 52 in data sheet) */
+	uint8_t reg8= 0x0;
+	reg8 |= (0x1 << 0); // CLK is 4 MHz
+	reg8 |= (0x1 << 3); // Only send voltage and currents
+	ade7880->regWrite8(HSDC_CFG, reg8);
 
-			SPI.transfer(tx_buffer, rx_buffer, 2, NULL);
-		}
+	// Enable HSDC
+	uint16_t reg16;
+	ade7880->regRead16(CONFIG, reg16);
+	reg16 |= (1<<6); // Enable HSDC
+	ade7880->regWrite16(CONFIG, reg16);
 
+	// Test read out current channels
+	while(1) {
+		int32_t I_A_rms_raw;
+		int32_t I_B_rms_raw;
+		int32_t I_C_rms_raw;
+		int32_t I_N_rms_raw;
+		ade7880->regRead24S(AIRMS, I_A_rms_raw);
+		ade7880->regRead24S(BIRMS, I_B_rms_raw);
+		ade7880->regRead24S(CIRMS, I_C_rms_raw);
+		ade7880->regRead24S(NIRMS, I_N_rms_raw);
+		// Full scale ADC voltage (Vin/PGA_GAIN) (pm) 5,326,737
+		// Full scale RMS measurement 5,326,737/srqt(2) = 3,766,572
+		// When integrator enabled @50 Hz FS RMS: 3,759,718
+		// When integrator enabled @60 Hz FS RMS: 3,133,207
+		// 0.5/sqrt(2) is real full scale at ADE7880 port
+		volatile float I_A_rms;
+		volatile float FS_A_ratio;
+
+		volatile float I_B_rms;
+		volatile float FS_B_ratio;
+
+		volatile float I_C_rms;
+		volatile float FS_C_ratio;
+
+		volatile float I_N_rms;
+		volatile float FS_N_ratio;
+
+		FS_A_ratio = ( (float) I_A_rms_raw ) / 3759718.0f;
+		I_A_rms = ( 0.5/sqrt(2) ) * FS_A_ratio * 10000;
+
+		FS_B_ratio = ( (float) I_B_rms_raw ) / 3759718.0f;
+		I_B_rms = ( 0.5/sqrt(2) ) * FS_B_ratio * 10000;
+
+		FS_C_ratio = ( (float) I_C_rms_raw ) / 3759718.0f;
+		I_C_rms = ( 0.5/sqrt(2) ) * FS_C_ratio * 10000;
+
+		FS_N_ratio = ( (float) I_N_rms_raw ) / 3759718.0f;
+		I_N_rms = ( 0.5/sqrt(2) ) * FS_N_ratio * 1000;
+		__asm("BKPT");
 	}
 
-	__asm("BKPT");
 
-
+//	while(1) {
+//		if( ADE7880::HSDCCounters.ssDeAssert > 1000) {
+//			for( int k = 0; k < 7; k++) {
+//				instantaneousHex[k] = ((ADE7880::RxBufferHSDC[k*4+0] << 24) | (ADE7880::RxBufferHSDC[k*4+1] << 16) | (ADE7880::RxBufferHSDC[k*4+2] << 8) | ADE7880::RxBufferHSDC[k*4+3]);
+//				instantaneous[k] = ((float) instantaneousHex[k]/10653474);
+//			}
+//
+//			ade7880->regRead24S(VAWV, reg32s);
+//			Va = (float)reg32s/10653474;
+//			__asm("BKPT");
+//		}
+//	}
+//
+//	__asm("BKPT");
 
 //	ade7880->initADE7880();
 

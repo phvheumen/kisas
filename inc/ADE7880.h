@@ -1,24 +1,13 @@
 #ifndef ADE7880_H
 #define ADE7880_H
 
-#include "pindefs.h"
-
-#define PSM0 0 //NORMAL POWER MODE (ALL PARTS)
-#define PSM1 1 //REDUCED POWER MODE
-#define PSM2 2 //LOW POWER MODE
-#define PSM3 3 //SLEEP MODE (ALL PARTS)
-
-#define IRQTIMEOUT 1000 //ms
-#define I2CMODE 1
-#define SPIMODE 0
-
-#include <application.h>
-#include <stdint.h>
 #include "utils.h"
 #include "ADE7880RegisterNames.h"
+#include "ADE7880Settings.h"
+#include <application.h>
+#include <stdint.h>
 
 #define SPI_CLK_FREQ	1000000
-
 #define I2C_ADDR_7b		0x38
 
 class ADE7880
@@ -49,7 +38,20 @@ public:
 	 */
 	static void onHSDCTransferFinished(void);
 	static void onHSDCSelect(uint8_t state);
+
+	typedef struct HSDCStruct {
+		uint32_t ssAssert;
+		uint32_t ssDeAssert;
+		uint32_t rxBytesCount;
+		uint32_t rxOk;
+		uint32_t rxNotOk;
+	} HSDCStruct_t;
+
+	static HSDCStruct_t HSDCCounters;
+
+	static uint8_t RxBufferHSDC[64];
 	static bool selectState;
+	static bool HSDCTransferFinished;
 
 
 	/*
@@ -158,6 +160,15 @@ public:
 	 */
 	void hardwareReset(void);
 
+	/*
+	 * Measurements functions
+	 */
+
+	/*
+	 * Members
+	 */
+	ADE7880Settings settings; // ADE7880Settings class. Use this class and its methods to change/verify/read settings of the ADE7880
+
 private:
 	typedef enum {
 		I2C_register,	// Use I2C for reading/writing registers
@@ -167,7 +178,7 @@ private:
 
 	SPIClass *	spi;	// SPI object
 	TwoWire *	i2c;	// I2C object
-	CommMode	commMode;
+	CommMode	commMode; // Which of the three modes op communication operation should be used
 	pin_t		ss;		// Chip select pin
 	pin_t		reset;	// Reset pin
 

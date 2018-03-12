@@ -1,24 +1,24 @@
 #include "ADE7880.h"
-
+#include "ADE7880Settings.h"
 #include "utils.h"
 #include "ADE7880RegisterNames.h"
 
-ADE7880::ADE7880(SPIClass * spi, pin_t ss, pin_t reset, bool comVerification) {
+ADE7880::ADE7880(SPIClass * spi, pin_t ss, pin_t reset, bool comVerification) :
+settings(this)
+{
 	this->spi = spi;
 	this->ss = ss; // Note: chip select GPIO is configured by SPI object
-	/*
-	 * When this constructor is called. This automatically means no i2c bus is assigned to this object.
-	 * We use the null pointer to indicate in member methods that register communication take place via SPI.
-	 * TODO: Implement other constructors where I2C bus can be assigned. We will use SPI slave in them to communicate over the
-	 * High speed bus of the ADE7880. For example to read adc sample registers at full rate.
-	 */
+
 	this->i2c = nullptr;
 	this->commMode = ADE7880::SPI_register;	// Use SPI for register read/write
+
 	this->reset = reset;
 	this->comVerification = comVerification;
 }
 
-ADE7880::ADE7880(TwoWire * i2c, pin_t reset, bool comVerification) {
+ADE7880::ADE7880(TwoWire * i2c, pin_t reset, bool comVerification) :
+settings(this)
+{
 	this->spi = nullptr;
 	this->ss = 0x0;
 
@@ -29,7 +29,9 @@ ADE7880::ADE7880(TwoWire * i2c, pin_t reset, bool comVerification) {
 	this->comVerification = comVerification;
 }
 
-ADE7880::ADE7880(SPIClass * spi, TwoWire * i2c, pin_t ss, pin_t reset, bool comVerification) {
+ADE7880::ADE7880(SPIClass * spi, TwoWire * i2c, pin_t ss, pin_t reset, bool comVerification) :
+settings(this)
+{
 	this->spi = spi;
 	this->ss = ss;
 
@@ -89,7 +91,7 @@ void ADE7880::initCommunicationBus(void) {
 
 		// SPI slave initialisation
 		this->spi->onSelect(ADE7880::onHSDCSelect);
-		this->spi->setDataMode(SPI_MODE3); // CPOL = 1, CPHA = 1
+		this->spi->setDataMode(SPI_MODE3);
 		this->spi->begin(SPI_MODE_SLAVE, this->ss);
 
 	break;
@@ -150,22 +152,55 @@ void ADE7880::initADE7880(void) {
 	this-regWrite8(0xE7FE, 0xAD);
 	this-regWrite8(0xE7E2, 0x04);
 
-	if ( this->commMode == ADE7880::SPI_HSDC ) {
-		// Configure HSDC (See table 52 in data sheet)
-		uint8_t reg8= 0x0;
-		reg8 |= (0x1 << 3); // Only send voltage and currents
-		this->regWrite8(HSDC_CFG, reg8);
+	/*
+	 * Do all other configuration
+	 */
 
+	/* Configure current signal path */
+	{
+		// PGA
+		typedef enum PGA_GAIN {
+			PGA_Gain1 = 0,
+			PGA_Gain2 = 1,
+			PGA_Gain4 = 2,
+			PGA_Gain8 = 3,
+			PGA_Gain16 = 4,
+		} PGA_GAIN_t;
+		// 						[ Phase voltage gain 		| Neutral current gain 		  | Phase current gain ]
+		this->regWrite16(GAIN, (((PGA_Gain1) << 6) & 0b111) |(((PGA_Gain1) << 3) & 0b111) | (((PGA_Gain1) << 0) & 0b111));
+		// HPF
+		uint8_t reg8;
+		this->regRead8(CONFIG3, reg8);
+		reg8 |= (0x1 << 0); // HPFEN
+		//reg8 |= (0x1 << 3); // ININTEN
+		this->regWrite8(CONFIG3, reg8);
+		// Digital Integrator
+		this->regWrite24S(DICOEFF, 0xFFF8000); // See p. 27 of datasheet for more details
 		uint16_t reg16;
 		this->regRead16(CONFIG, reg16);
-		reg16 |= (1<<6); // Enable HSDC
+		reg16 |= (0x1 << 0); // INTEN
 		this->regWrite16(CONFIG, reg16);
+		// Digital Gain I (See p. 28 of datasheet for more details)
+		// Gain = 1 + regValue/2^23
+		this->regWrite24S(AIGAIN, -293910);
+		this->regWrite24S(BIGAIN, 0x00000);
+		this->regWrite24S(CIGAIN, -293910);
+		this->regWrite24S(NIGAIN, 0x00000);
+
+		// RMS offsets adjust
+		this->regWrite24S(AIRMSOS, -4);
+		this->regWrite24S(BIRMSOS, 0x000000);
+		this->regWrite24S(CIRMSOS, -4);
+		this->regWrite24S(NIRMSOS, 0x000000);
+
+		int32_t reg32s;
+		this->regRead24S(AIGAIN, reg32s);
 	}
 
-//	/*
-//	 * Do all other configuration
-//	 */
-//
+
+
+
+
 //	this-regWrite16(GAIN, 0b0000000011011011); //Select the PGA gains in the phase currents, voltages and neutral current channels//gain 8 gain 8 gain 8
 //
 //	this-regWrite16(CFMODE, 0x00A0);  //turn on CF1,2,3 pins (default is turn of with register value 0x0EA0)
@@ -190,6 +225,8 @@ void ADE7880::initADE7880(void) {
 //
 	// Start the DSP by setting Run = 1
 	uint16_t reg = 0x0001;
+	this->regWrite16(RUN, reg);
+	this->regWrite16(RUN, reg);
 	this->regWrite16(RUN, reg);
 }
 
@@ -216,12 +253,35 @@ void ADE7880::onHSDCTransferFinished(void) {
 	return;
 }
 void ADE7880::onHSDCSelect(uint8_t state) {
-	if(state) { // Slave is selected
-		ADE7880::selectState = true;
+
+	volatile float instantaneous[7] = { 0 };
+	volatile int32_t instantaneousHex[7] = { 0x0 };
+
+	if ( state == 0 ) { // Slave chip select is high
+		ADE7880::HSDCCounters.ssDeAssert += 1;
+		// Stop ongoing receive sequence
+		SPI.transferCancel();
+		ADE7880::HSDCCounters.rxBytesCount = SPI.available();
+		if (SPI.available() == 28 ) {
+			ADE7880::HSDCCounters.rxOk += 1;
+		} else {
+			ADE7880::HSDCCounters.rxNotOk += 1;
+		}
+		// Start receiving
+		SPI.transfer(NULL, ADE7880::RxBufferHSDC, sizeof(ADE7880::RxBufferHSDC), ADE7880::onHSDCTransferFinished);
+	} else { // Slave chip select is low
+		ADE7880::HSDCCounters.ssAssert += 1;
+		// Data comes too fast after chip select assertion.
+		// Since the slave receives data periodically at 8 kHz
+		// Start and stop receiving is both done on the chip select
+		// de-assert.
 	}
 	return;
 }
 bool ADE7880::selectState = false;
+bool ADE7880::HSDCTransferFinished = false;
+uint8_t ADE7880::RxBufferHSDC[64] = { 0x0 };
+ADE7880::HSDCStruct_t ADE7880::HSDCCounters = { 0 };
 
 void ADE7880::I2CTransaction(uint16_t RegisterAddress, uint8_t * Data, uint16_t len, bool rw) {
 	uint16_t _RegisterAddress = byteswap(RegisterAddress);	// ARM is little Endian, I2C communication is big Endian
@@ -287,7 +347,7 @@ bool ADE7880::regRead8(uint16_t RegisterAddresss, uint8_t & Data) {
 	}
 }
 bool ADE7880::regWrite8(uint16_t RegisterAddresss, uint8_t Data) {
-	this->regRead(RegisterAddresss, (uint8_t *)&Data, sizeof(Data));
+	this->regWrite(RegisterAddresss, (uint8_t *)&Data, sizeof(Data));
 	if(this->comVerification) {
 		return this->verifyCommunication(RegisterAddresss, Data, false);
 	} else {
@@ -315,7 +375,7 @@ bool ADE7880::regRead16(uint16_t RegisterAddresss, uint16_t & Data) {
 }
 bool ADE7880::regWrite16(uint16_t RegisterAddresss, uint16_t Data) {
 	uint16_t TxData = byteswap(Data);
-	this->regRead(RegisterAddresss, (uint8_t *)&TxData, sizeof(TxData));
+	this->regWrite(RegisterAddresss, (uint8_t *)&TxData, sizeof(TxData));
 	if(this->comVerification) {
 		return this->verifyCommunication(RegisterAddresss, Data, false);
 	} else {
@@ -420,7 +480,7 @@ bool ADE7880::regRead32(uint16_t RegisterAddresss, uint32_t & Data) {
 }
 bool ADE7880::regWrite32(uint16_t RegisterAddresss, uint32_t Data) {
 	uint32_t TxData = byteswap(Data);
-	this->regRead(RegisterAddresss, (uint8_t *)&TxData, sizeof(TxData));
+	this->regWrite(RegisterAddresss, (uint8_t *)&TxData, sizeof(TxData));
 	if(this->comVerification) {
 		return this->verifyCommunication(RegisterAddresss, Data, false);
 	} else {
@@ -439,7 +499,7 @@ bool ADE7880::regRead32S(uint16_t RegisterAddresss, int32_t & Data) {
 }
 bool ADE7880::regWrite32S(uint16_t RegisterAddresss, int32_t Data) {
 	int32_t TxData = byteswap(Data);
-	this->regRead(RegisterAddresss, (uint8_t *)&TxData, sizeof(TxData));
+	this->regWrite(RegisterAddresss, (uint8_t *)&TxData, sizeof(TxData));
 	if(this->comVerification) {
 		return this->verifyCommunication(RegisterAddresss, Data, false);
 	} else {
