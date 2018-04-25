@@ -1,0 +1,172 @@
+//	while(1) {
+//		if( ADE7880::HSDCCounters.ssDeAssert > 1000) {
+//			for( int k = 0; k < 7; k++) {
+//				instantaneousHex[k] = ((ADE7880::RxBufferHSDC[k*4+0] << 24) | (ADE7880::RxBufferHSDC[k*4+1] << 16) | (ADE7880::RxBufferHSDC[k*4+2] << 8) | ADE7880::RxBufferHSDC[k*4+3]);
+//				instantaneous[k] = ((float) instantaneousHex[k]/10653474);
+//			}
+//
+//			ade7880->regRead24S(VAWV, reg32s);
+//			Va = (float)reg32s/10653474;
+//			__asm("BKPT");
+//		}
+//	}
+//
+//	__asm("BKPT");
+
+//	ade7880->initADE7880();
+
+//	if (!SD.begin(chipSelect, SPI_HALF_SPEED)) {
+//		// If SD card is not inserted (or broken) we end up here.
+////	    SD.initErrorHalt();
+//		__asm("BKPT");
+//	}
+//
+//	int c = 0;
+//	while(c == 0)
+//	{
+//		if(!SD.exists(filename)) // So, there does not exist a file with that name
+//		{
+//			// open the file for write at end like the "Native SD library"
+//			if (!myFile.open(filename, O_RDWR | O_CREAT | O_AT_END)) {
+//				SD.errorHalt("opening abc.txt for write failed");
+//			}
+//			myFile.close();
+//			c = 1; // Breaking out of while loop
+//		} else if(SD.exists(filename)) { // So, there does exist a file with that name -> change the name and search again
+//			incrementNumStr(filename);
+//		}
+//	}
+//	__asm("BKPT");
+//
+//
+//	// open the file for write at end like the "Native SD library"
+//	if (!myFile.open(filename, O_RDWR | O_CREAT | O_AT_END)) {
+//		SD.errorHalt("opening abc.txt for write failed");
+//	}
+//	myFile.println("testing 1, 2, 3."); // if the file opened okay, write to it:
+//	myFile.printf("fileSize: %d\n", myFile.fileSize()); // close the file:
+//	myFile.close(); // close the file:
+//
+//	// re-open the file for reading:
+//	if (!myFile.open(filename, O_READ)) {
+//	SD.errorHalt("opening test.txt for read failed");
+//	}
+//	Serial.println("abc.txt content:");
+//
+//	// read from the file until there's nothing else in it:
+//	int data;
+//	while ((data = myFile.read()) >= 0) {
+//	Serial.write(data);
+//	}
+//	// close the file:
+//	myFile.close();
+//
+//	__asm("BKPT");
+
+
+	// Initialise the applications
+//	Application.SimpleScope.init();
+//
+//	String ossil = "0a-53a-104a-150a-190a-221a-243a-254a-254a-243a-221a-190a-150a-104a-53a0a53a104a150a190a221a243a254a254a243a221a190a150a104a53a0";
+//	Particle.variable("getossil", ossil);
+
+	/*
+	 * Measured phase 3 for neutral, then A=0 B=1 and C=2,  Neutral not yet implemented.
+	 * I presume compiler will just fill in the number everywhere since it is static, dont want to do it with #DEFINE yet though
+	 */
+	byte            Phase = 2;
+	int             Timestamp11 = Time.now();
+	unsigned long   Timestamp12 = millis();
+	float           VRMSC = VxRMSMeasurement(Phase);
+	float           IRMSC = IxRMSMeasurement(Phase);
+	float           Frequency = FrequencyMeasurement(Phase);
+	float           Powerfactor = xPFMeasurement(Phase);
+	float           WATTHR = xWATTHRMeasurement(Phase);
+	float           FWATTHR = xFWATTHRMeasurement(Phase);
+	float           VARHR = xVARHRMeasurement(Phase);
+	String dataString = "";
+
+	unsigned long   Timestamp2 = millis();
+	//    File dataFile = SD.open("datalog.txt", FILE_WRITE);
+
+	dataString += "Time start Measurements:";
+	dataString += String(Timestamp11);
+	dataString += "/t";
+	dataString += String(Timestamp12);
+	dataString += "/t time End measurements:";
+	dataString += String(Timestamp2);
+	dataString += "/t Frequency:";
+	dataString += String(Frequency);
+	dataString += "VRMS = ";
+	dataString += String(VRMSC);
+
+	while (sizeof(dataString)<512){
+	 dataString += "0";
+	}
+	if (sizeof(dataString)>512)
+	{
+		// TODO: Maak korter (niet van P.H. van Heumen)
+	}
+
+//	if (dataFile) {
+//	dataFile.println(dataString);
+//	dataFile.close();
+//	// print to the serial port too:
+//	Serial.println(datastring);
+//	}
+//	else {
+//	Serial.println("error opening datalog.txt");
+//	}
+	Application.SimpleScope.update(); //automatic every 1 second
+	delay(500);
+	
+	
+	ApplicationManager Application;
+
+File myFile;
+char filename[] = "000.txt";
+
+uint8_t ram[20000] = { 0 };
+
+void incrementNumStr(char * str) {
+	for(int i = strlen(str) - 5; i >= 0; i--)
+	{
+		if(str[i] >= '9') {
+			str[i] = '0';
+			continue;
+		} else if(str[i] < '9') {
+			str[i] = str[i] + 1;
+			break;
+		}
+	}
+}
+
+// Pick an SPI configuration.
+// See SPI configuration section below (comments are for photon).
+#ifndef SPI_CONFIGURATION
+#define SPI_CONFIGURATION 1
+#endif
+//------------------------------------------------------------------------------
+// Setup SPI configuration.
+#if SPI_CONFIGURATION == 0
+// Primary SPI with DMA
+// SCK => A3, MISO => A4, MOSI => A5, SS => A2 (default)
+SdFat SD;
+const uint8_t chipSelect = SS;
+#elif SPI_CONFIGURATION == 1
+// Secondary SPI with DMA
+// SCK => D4, MISO => D3, MOSI => D2, SS => D5
+SdFat SD(1);
+const uint8_t chipSelect = SS_SD;
+#elif SPI_CONFIGURATION == 2
+// Primary SPI with Arduino SPI library style byte I/O.
+// SCK => A3, MISO => A4, MOSI => A5, SS => A2 (default)
+SdFatLibSpi SD;
+const uint8_t chipSelect = SS;
+#elif SPI_CONFIGURATION == 3
+// Software SPI.  Use any digital pins.
+// MISO => D5, MOSI => D6, SCK => D7, SS => D0
+SdFatSoftSpi<D5, D6, D7> SD;
+const uint8_t chipSelect = D0;
+#endif  // SPI_CONFIGURATION
+//------------------------------------------------------------------------------

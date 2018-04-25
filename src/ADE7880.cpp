@@ -1,10 +1,12 @@
 #include "ADE7880.h"
-#include "ADE7880Settings.h"
+
+#include "ADE7880Setting.h"
 #include "utils.h"
 #include "ADE7880RegisterNames.h"
 
 ADE7880::ADE7880(SPIClass * spi, pin_t ss, pin_t reset, bool comVerification) :
-settings(this)
+settings(this),
+measurement(this)
 {
 	this->spi = spi;
 	this->ss = ss; // Note: chip select GPIO is configured by SPI object
@@ -17,7 +19,8 @@ settings(this)
 }
 
 ADE7880::ADE7880(TwoWire * i2c, pin_t reset, bool comVerification) :
-settings(this)
+settings(this),
+measurement(this)
 {
 	this->spi = nullptr;
 	this->ss = 0x0;
@@ -30,7 +33,8 @@ settings(this)
 }
 
 ADE7880::ADE7880(SPIClass * spi, TwoWire * i2c, pin_t ss, pin_t reset, bool comVerification) :
-settings(this)
+settings(this),
+measurement(this)
 {
 	this->spi = spi;
 	this->ss = ss;

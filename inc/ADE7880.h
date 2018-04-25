@@ -3,9 +3,10 @@
 
 #include "utils.h"
 #include "ADE7880RegisterNames.h"
-#include "ADE7880Settings.h"
+#include "ADE7880Measurement.h"
 #include <application.h>
 #include <stdint.h>
+#include "ADE7880Setting.h"
 
 #define SPI_CLK_FREQ	1000000
 #define I2C_ADDR_7b		0x38
@@ -161,13 +162,10 @@ public:
 	void hardwareReset(void);
 
 	/*
-	 * Measurements functions
-	 */
-
-	/*
 	 * Members
 	 */
-	ADE7880Settings settings; // ADE7880Settings class. Use this class and its methods to change/verify/read settings of the ADE7880
+	ADE7880Setting settings; // ADE7880Setting class. Use this class and its methods to change/verify/read settings of the ADE7880
+	ADE7880Measurement measurement; // ADE7880 Measurement class. Use this class and its methods to do measurements with the ADE7880
 
 private:
 	typedef enum {
