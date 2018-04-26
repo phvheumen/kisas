@@ -137,6 +137,148 @@ float ADE7880Measurement::Vrms(Phase_t phase) {
 }
 
 /**
+	Get the instantaneous voltage waveform measurement of a specified phase.
+
+	@param phase The phase to measure.
+	@return The waveform voltage [V]. If value is 0.0f, check for errors that may occurred
+
+ */
+float ADE7880Measurement::V(Phase_t phase) {
+	uint16_t registerAddress;
+	float pgaGain = (float) this->_parent->settings.getPGAGain(ADE7880Setting::PGA3);;
+	float sensorGain;
+
+	switch (phase) {
+	case PHASE_A:
+		registerAddress = VAWV;
+		sensorGain = this->voltageSensorGain[PHASE_A];
+		break;
+	case PHASE_B:
+		registerAddress = VBWV;
+		sensorGain = this->voltageSensorGain[PHASE_B];
+		break;
+	case PHASE_C:
+		registerAddress = VCWV;
+		sensorGain = this->voltageSensorGain[PHASE_C];
+		break;
+	case PHASE_N:
+		return 0.0f; // There is no neutral voltage measurement, return 0.0f
+		break;
+	default: // If ever enumerations are added to Phase_t, this function doesn't handle them and returns 0.0f
+		return 0.0f;
+	}
+
+	int32_t v_raw;
+	if( !this->_parent->regRead24S(registerAddress, v_raw) ) {
+		// Register read failed, return 0.0f
+		return 0.0f;
+	}
+
+	/*
+	 * ADC produces 24-bit signed two's complement codes.
+	 * Extreme codes are then +/- 2^23 = 8,388,608 corresponding with +/- 0.787V
+	 * Full scale range is then +/- 5,326,737 corresponding with +/- 0.5V
+	 * Full scale RMS measurement corresponds then with 5,326,737/srqt(2) = 3,766,572 (0.5V/sqrt(2) = 0.354Vrms at ADC input)
+	 *
+	 * In the calculations of the real world values, xVRMSOS and xVGAIN registers are not used.
+	 * These register are considered to be calibration registers for this measurement.
+	 */
+
+	return ( 0.5f * ( ((float) v_raw) / 5326737.0f) * sensorGain ) / pgaGain;
+}
+
+/**
+	Get the instantaneous current waveform measurement of a specified phase.
+
+	@param phase The phase to measure.
+	@return The waveform current [A]. If value is 0.0f, check for errors that may occurred
+
+ */
+float ADE7880Measurement::I(Phase_t phase) {
+	uint16_t registerAddress;
+	float pgaGain;
+	float sensorGain;
+
+	switch (phase) {
+	case PHASE_A:
+		registerAddress = IAWV;
+		pgaGain = (float) this->_parent->settings.getPGAGain(ADE7880Setting::PGA1);
+		sensorGain = this->currentSensorGain[PHASE_A];
+		break;
+	case PHASE_B:
+		registerAddress = IBWV;
+		pgaGain = (float) this->_parent->settings.getPGAGain(ADE7880Setting::PGA1);
+		sensorGain = this->currentSensorGain[PHASE_B];
+		break;
+	case PHASE_C:
+		registerAddress = ICWV;
+		pgaGain = (float) this->_parent->settings.getPGAGain(ADE7880Setting::PGA1);
+		sensorGain = this->currentSensorGain[PHASE_C];
+		break;
+	case PHASE_N:
+		registerAddress = INWV;
+		pgaGain = (float) this->_parent->settings.getPGAGain(ADE7880Setting::PGA2);
+		sensorGain = this->currentSensorGain[PHASE_N];
+		break;
+	default: // If ever enumerations are added to Phase_t, this functions doesn't handle them and returns 0.0f
+		return 0.0f;
+	}
+
+	int32_t i_raw;
+	if( !this->_parent->regRead24S(registerAddress, i_raw) ) {
+		// Register read failed, return 0.0f
+		return 0.0f;
+	}
+
+	/*
+	 * ADC produces 24-bit signed two's complement codes.
+	 * Extreme codes are then +/- 2^23 = 8,388,608 corresponding with +/- 0.787V
+	 * Full scale range is then +/- 5,326,737 corresponding with +/- 0.5V
+	 * Full scale RMS measurement corresponds then with 5,326,737/srqt(2) = 3,766,572 (0.5V/sqrt(2) = 0.354Vrms at ADC input)
+	 *
+	 * In the calculations of the real world values, xIRMSOS and xIGAIN registers are not used.
+	 * These register are considered to be calibration registers for this measurement.
+	 */
+
+	return ( ( 0.5f ) * ( ((float) i_raw) / 5326737.0f) * sensorGain ) / pgaGain;
+}
+
+/**
+	Get the PF of a specified phase.
+
+	@param phase The phase to measure.
+	@return The power factor between -1 and 1 for the given phase.
+ */
+float ADE7880Measurement::PF(Phase_t phase) {
+	uint16_t registerAddress;
+
+	switch (phase) {
+	case PHASE_A:
+		registerAddress = APF;
+		break;
+	case PHASE_B:
+		registerAddress = BPF;
+		break;
+	case PHASE_C:
+		registerAddress = CPF;
+		break;
+	case PHASE_N:
+		return 0.0f;
+		break;
+	default: // If ever enumerations are added to Phase_t, this functions doesn't handle them and returns 0.0f
+		return 0.0f;
+	}
+
+	int16_t pf_raw;
+	if ( !this->_parent->regRead16S(registerAddress, pf_raw) ) {
+		// Register read failed, return 0.0f
+		return 0.0f;
+	}
+
+	return ( (float) pf_raw / (2^15) );
+}
+
+/**
 	Get the line voltage period on the given phase.
 	When period is outside valid range, it returns 0.0
 
@@ -217,11 +359,104 @@ float ADE7880Measurement::frequency(Phase_t phase) {
 }
 
 /**
+	Gives the instantaneous total active power.
+
+	@param phase Phase to measure total active power.
+	@return The total instantaneous active power. If value is 0.0f, check for errors that may occurred
+ */
+float ADE7880Measurement::Ptotal(Phase_t phase) {
+	uint16_t registerAddress;
+
+	switch (phase) {
+	case PHASE_A:
+		registerAddress = AWATT;
+		break;
+	case PHASE_B:
+		registerAddress = BWATT;
+		break;
+	case PHASE_C:
+		registerAddress = CWATT;
+		break;
+	default:
+		return 0.0f;
+	}
+
+	int32_t power_raw;
+	if( !this->_parent->regRead24S(registerAddress, power_raw) ) {
+		// Register read failed, return 0.0f
+		return 0.0f;
+	}
+
+	uint32_t pMax = 27059678 >> 4;
+	float powerFS = this->getPowerFS(phase);
+
+	return powerFS * ( (float) power_raw ) / (float) pMax;
+}
+
+/**
+	Gives the instantaneous total apparent power.
+
+	@param phase Phase to measure total apparent power.
+	@return The total instantaneous apparent power. If value is 0.0f, check for errors that may occurred
+ */
+float ADE7880Measurement::Stotal(Phase_t phase) {
+	uint16_t registerAddress;
+
+	switch (phase) {
+	case PHASE_A:
+		registerAddress = AVA;
+		break;
+	case PHASE_B:
+		registerAddress = BVA;
+		break;
+	case PHASE_C:
+		registerAddress = CVA;
+		break;
+	default:
+		return 0.0f;
+	}
+
+	int32_t power_raw;
+	if( !this->_parent->regRead24S(registerAddress, power_raw) ) {
+		// Register read failed, return 0.0f
+		return 0.0f;
+	}
+
+	uint32_t pMax = 27059678 >> 4;
+	float powerFS = this->getPowerFS(phase);
+
+	return powerFS * ( (float) power_raw ) / (float) pMax;
+}
+
+////write to WTHR to change accuracy of CWATTHR
+//float xWATTHRMeasurement(byte RegisterX){
+//	// TODO: Change register read function
+//    //SingleSample = Measurement.SPIRead32S(((uint16_t)AWATTHR+RegisterX));
+//    float WATTMeasured=(SingleSample/123456789); //still arbitrairy numer, need to calculate well (oa eq 26 from datasheet ADE7880)
+//    return WATTMeasured;
+//}       //DONE float fetch xWATTHR //total active engergy accumulation
+//
+//float xFWATTHRMeasurement(byte RegisterX){
+//	// TODO: Change register read function
+//    //SingleSample = Measurement.SPIRead32S(((uint16_t)AFWATTHR+RegisterX));
+//    float WATTMeasured=(SingleSample/123456789); //still arbitrairy numer, need to calculate well (oa eq x from datasheet ADE7880)
+//    return WATTMeasured;
+//}       //DONE float fetch xFWATTHR //Fundemental active energy accumulation
+//
+//float xVARHRMeasurement(byte RegisterX){
+//	// TODO: Change register read function
+//    //SingleSample = Measurement.SPIRead32S(((uint16_t)AFVARHR+RegisterX));
+//    float VARMeasured=(SingleSample/123456789); //still arbitrairy numer, need to calculate well (oa eq x from datasheet ADE7880)
+//    return VARMeasured;
+//}
+//
+
+/**
 	Sets the sensor gain for the current channels. The gain should be strictly positive.
 	If invalid gain is given, the gain will be set to 1.0
 
 	@param phase The phase to set the gain for
-	@param gain The gain of the sensor in unit [A/V]
+	@param gain The gain of the sensor in unit [A/V] (input/output)
  */
 void ADE7880Measurement::setCurrentSensorGain(Phase_t phase, float gain) {
 	if( gain > 0 ) {
@@ -236,7 +471,7 @@ void ADE7880Measurement::setCurrentSensorGain(Phase_t phase, float gain) {
 	If invalid gain is given, the gain will be set to 1.0
 
 	@param phase The phase to set the gain for
-	@param gain The gain of the sensor in unit [V/V] (input/output)
+	@param gain The gain of the sensor in unit [V/V] (input/output).
  */
 void ADE7880Measurement::setVoltageSensorGain(Phase_t phase, float gain) {
 	switch (phase) {
@@ -252,6 +487,80 @@ void ADE7880Measurement::setVoltageSensorGain(Phase_t phase, float gain) {
 	default:
 		this->voltageSensorGain[phase] = 1.0f;
 	}
+}
+
+/**
+	Get voltage full scale range based on sensor gain and ADE7880 settings
+
+	@param phase Phase to get the FS range from
+	@return The full scale range voltage of the specified channel. If value is 0.0f, check for errors that may occurred
+ */
+float ADE7880Measurement::getVoltageFS(Phase_t phase) {
+	float pgaGain;
+	float sensorGain;
+
+	switch (phase) {
+	case PHASE_A:
+	case PHASE_B:
+	case PHASE_C:
+		pgaGain = (float) this->_parent->settings.getPGAGain(ADE7880Setting::PGA3);
+		sensorGain = this->voltageSensorGain[phase];
+		break;
+	default:
+		return 0.0;
+	}
+
+	return ( 0.5f * sensorGain / pgaGain );
+}
+
+/**
+	Get current full scale range based on sensor gain and ADE7880 settings
+
+	@param phase Phase to get the FS range from
+	@return The full scale range current of the specified channel. If value is 0.0f, check for errors that may occurred
+ */
+float ADE7880Measurement::getCurrentFS(Phase_t phase) {
+	float pgaGain;
+
+	switch (phase) {
+	case PHASE_A:
+	case PHASE_B:
+	case PHASE_C:
+		pgaGain = (float) this->_parent->settings.getPGAGain(ADE7880Setting::PGA1);
+		break;
+	case PHASE_N:
+		pgaGain = (float) this->_parent->settings.getPGAGain(ADE7880Setting::PGA2);
+		break;
+	default:
+		return 0.0;
+	}
+
+	float sensorGain = this->currentSensorGain[phase];
+	return ( 0.5f * sensorGain / pgaGain );
+}
+
+/**
+	Get power full scale range based on sensor gain and ADE7880 settings
+
+	@param phase Phase to get the FS range from
+	@return The full scale range power of the specified channel. If value is 0.0f, check for errors that may occurred
+ */
+float ADE7880Measurement::getPowerFS(Phase_t phase) {
+	float currentFS;
+	float voltageFS;
+
+	switch (phase) {
+	case PHASE_A:
+	case PHASE_B:
+	case PHASE_C:
+		currentFS = this->getCurrentFS(phase);
+		voltageFS = this->getVoltageFS(phase);
+		break;
+	default:
+		return 0.0;
+	}
+
+	return ( currentFS * voltageFS ) / 2;
 }
 
 

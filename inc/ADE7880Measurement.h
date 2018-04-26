@@ -39,12 +39,14 @@ public:
 
 	float V(Phase_t phase);
 	float I(Phase_t phase);
+
+	float period(Phase_t phase);
+	float frequency(Phase_t phase);
+
 	float Ptotal(Phase_t phase);
 	float Stotal(Phase_t phase);
 
 	float PF(Phase_t phase);
-	float period(Phase_t phase);
-	float frequency(Phase_t phase);
 
 	/*
 	 * Settings methods
@@ -55,11 +57,19 @@ public:
 	void setVoltageSensorGain(Phase_t phase, float gain);
 	float getVoltageSensorGain(Phase_t phase) { return this->currentSensorGain[phase]; };
 
+	/*
+	 * Miscellaneous methods
+	 */
+	float getVoltageFS(Phase_t phase);
+	float getCurrentFS(Phase_t phase);
+	float getPowerFS(Phase_t phase);
+
 private:
 	ADE7880 * _parent;
 
 	float currentSensorGain[4];	// Sensor gain for the current input {A, B, C, N}
 	float voltageSensorGain[3]; // Sensor gain for the voltage input {A, B, C}
+
 };
 
 //
@@ -74,21 +84,18 @@ private:
 //}
 //
 //float HarmonicXVRMSMeasurement(void){ //measures the VRMS in the distortion of HX, needs testing
-//	// TODO: Change register read function
 //    //SingleSample = Measurement.SPIRead24S((uint16_t)HXVRMS);
 //    float HVmeasured=(SingleSample/3766572)*0.5*.5*sqrt(2)*1000;
 //    return HVmeasured;
 //}
 //
 //float HarmonicYVRMSMeasurement(void){ //measures the VRMS in the distortion of HY, needs testing
-//	// TODO: Change register read function
 //    //SingleSample = Measurement.SPIRead24S((uint16_t)HYVRMS);
 //    float HVmeasured=(SingleSample/3766572)*0.5*.5*sqrt(2)*1000;
 //    return HVmeasured;
 //}
 //
 //float HarmonicZVRMSMeasurement(void){ //measures the VRMS in the distortion of HZ,needs testing
-//	// TODO: Change register read function
 //    //SingleSample = Measurement.SPIRead24S((uint16_t)HZVRMS);
 //    float HVmeasured=(SingleSample/3766572)*0.5*.5*sqrt(2)*1000;
 //    return HVmeasured;
@@ -124,37 +131,6 @@ private:
 //}
 //
 
-////write to WTHR to change accuracy of CWATTHR
-//float xWATTHRMeasurement(byte RegisterX){
-//	// TODO: Change register read function
-//    //SingleSample = Measurement.SPIRead32S(((uint16_t)AWATTHR+RegisterX));
-//    float WATTMeasured=(SingleSample/123456789); //still arbitrairy numer, need to calculate well (oa eq 26 from datasheet ADE7880)
-//    return WATTMeasured;
-//}       //DONE float fetch xWATTHR //total active engergy accumulation
-//
-//float xFWATTHRMeasurement(byte RegisterX){
-//	// TODO: Change register read function
-//    //SingleSample = Measurement.SPIRead32S(((uint16_t)AFWATTHR+RegisterX));
-//    float WATTMeasured=(SingleSample/123456789); //still arbitrairy numer, need to calculate well (oa eq x from datasheet ADE7880)
-//    return WATTMeasured;
-//}       //DONE float fetch xFWATTHR //Fundemental active energy accumulation
-//
-//float xVARHRMeasurement(byte RegisterX){
-//	// TODO: Change register read function
-//    //SingleSample = Measurement.SPIRead32S(((uint16_t)AFVARHR+RegisterX));
-//    float VARMeasured=(SingleSample/123456789); //still arbitrairy numer, need to calculate well (oa eq x from datasheet ADE7880)
-//    return VARMeasured;
-//}
-//
-//float xPFMeasurement(byte RegisterX){
-//	// TODO: Change register read function
-//    //SingleSample = Measurement.SPIRead16(((uint16_t)APF+RegisterX));
-//    float PFMeasured=((float)SingleSample/(2^15));
-//    return PFMeasured;
-//}       //DONE float fetch xPF // the Powerfactor
-//
-////float fetch xWATT // Total Active Power Calculation joules/s, (waveform sample?)
-////float fetch xVA // Instantaneous power (waveform sample?)
 
 
 #endif /* INC_ADE7880MEASUREMENT_H_ */
