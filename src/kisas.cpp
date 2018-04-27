@@ -36,37 +36,6 @@ SYSTEM_MODE(SEMI_AUTOMATIC);
 //ADE7880 * ade7880 = new ADE7880(&Wire, RESETINV, true);
 ADE7880 * ade7880 = new ADE7880(&SPI, &Wire, SS_HSA, RESETINV, false);
 
-/* KISAS-V2_OLD */
-//######### variables #############
-ADE7880 Measurement(&SPI, &Wire, SS_HSA, RESETINV, false);
-
-uint32_t ReturnValue;
-int32_t SignedReturnValue;
-float VArms;
-float IArms;
-float INrms;
-float PArms;
-float SArms2;
-float SArms;
-float PFA;
-float CosphiA;
-float SampledValue;
-    unsigned long Dtime;
-    unsigned long Curtime;
-    unsigned long Newtime;
-float VASample;
-    float SampleBlock[1000];
-float SingleSample;
-    int StartIndex, StopIndex;
-//Timer timer(1000, setup);
-extern http_request_t request;
-extern int8_t giveRegType(uint16_t RegisterAdress);
-extern int PostHttp(String body,String url);
-String PostBuffer="";
-
-//######### forward declare #############
-int getSettings(String input);
-/* END KISAS-V2_OLD */
 
 /* Defines */
 #define PARTICLE_CLOUD_TO_MS	20000
@@ -76,11 +45,28 @@ int getSettings(String input);
 
 /* Forward declarations */
 void particleConnectTimeOutCallback(void);
+int getSettings(String input);
 
 /* Variable declarations/definitions */
+ADE7880 Measurement(&SPI, &Wire, SS_HSA, RESETINV, false);
 ApplicationManager Application;
 Timer particleConnectTimeOut(PARTICLE_CLOUD_TO_MS, particleConnectTimeOutCallback, true);
 String ossil = "0a-53a-104a-150a-190a-221a-243a-254a-254a-243a-221a-190a-150a-104a-53a0a53a104a150a190a221a243a254a254a243a221a190a150a104a53a0";
+String PostBuffer="";
+
+// HttpClient
+unsigned int nextTime = 0;    // Next time to contact the server
+HttpClient _http;
+
+http_header_t _headers[] = {
+	{ "Content-Type", "application/json" },
+	{ "Accept" , "application/json" },
+    { "Accept" , "*/*"},
+    { NULL, NULL } // NOTE: Always terminate headers will NULL
+};
+
+http_request_t _request;
+http_response_t _response;
 
 /*
  * void setup()
@@ -164,6 +150,14 @@ void setup()
 	 */
 	BOOT_MSG("Initialising ADE7880");
 
+	/*
+	 * Initialise HttpClient
+	 */
+	BOOT_MSG("Initialise HttpClient");
+	_request.hostname = "requestbin.net";
+	_request.port = 80;
+	_request.path = "/r/qnd06rqn";
+//	_request.body = String("{\"key\":\"value\", \"var\":\"hello, wolrd!\", \"integer\":57 }");
 
 	/*
 	 * Initialising applications
@@ -174,9 +168,9 @@ void setup()
 //	Application.SimpleScope.init();
 //	BOOT_MSG("SimpleScope started")
 
-	BOOT_MSG("TimeAverage");
-	Application.TimeAverage.init();
-	BOOT_MSG("TimeAverage started");
+//	BOOT_MSG("TimeAverage");
+//	Application.TimeAverage.init();
+//	BOOT_MSG("TimeAverage started");
 
 	//Timer te(1000, &SmplScope::update, Application.SimpleScope);
 
@@ -184,13 +178,6 @@ void setup()
 
 	Serial.printlnf("");
 	Serial.printlnf("Free memory: %d Bytes", System.freeMemory());
-
-	request.hostname = "liandon-meetdata.nl";
-	request.port= 80;
-	request.path = "/Kisas/Post.php";
-//	Serial1.println(request.hostname);
-//	Serial1.println(request.port,DEC);
-//	Serial1.println(request.path);
 
 //	ade7880->Begin();
 //
@@ -218,7 +205,19 @@ void setup()
 #pragma GCC pop_options
 
 void loop() {
+	if (nextTime > millis()) {
+		return;
+	}
+//	_http.post(_request, _response, _headers);
 
+	_http.get(_request, _response, _headers);
+	Serial.print("Application>\tResponse status: ");
+	Serial.println(_response.status);
+
+	Serial.print("Application>\tHTTP Response Body: ");
+	Serial.println(_response.body);
+
+	nextTime = millis() + 5000;
 }
 
 void particleConnectTimeOutCallback(void)
