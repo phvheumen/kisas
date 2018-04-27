@@ -48,6 +48,11 @@ public:
 
 	float PF(Phase_t phase);
 
+	float activeEnergyTotal(Phase_t phase);
+	float activeEnergyFundamental(Phase_t phase);
+	float reactiveEnergyFundamental(Phase_t phase);
+	float apparentEnergyTotal(Phase_t phase);
+
 	/*
 	 * Settings methods
 	 */
@@ -70,67 +75,10 @@ private:
 	float currentSensorGain[4];	// Sensor gain for the current input {A, B, C, N}
 	float voltageSensorGain[3]; // Sensor gain for the voltage input {A, B, C}
 
+	float activeTotalEnergyAccum;
+	float activeFundamentalEnergyAccum;
+	float reactiveFundamentalEnergyAccum;
+	float apparentTotalEnergyAccum;
 };
-
-//
-//float HarmonicDistortionVTHD(void){
-//    // TODO: Implement
-//	return 0.0f;
-//}
-//
-//float HarmonicDistortionITHD(void){
-//    // TODO: Implement
-//	return 0.0f;
-//}
-//
-//float HarmonicXVRMSMeasurement(void){ //measures the VRMS in the distortion of HX, needs testing
-//    //SingleSample = Measurement.SPIRead24S((uint16_t)HXVRMS);
-//    float HVmeasured=(SingleSample/3766572)*0.5*.5*sqrt(2)*1000;
-//    return HVmeasured;
-//}
-//
-//float HarmonicYVRMSMeasurement(void){ //measures the VRMS in the distortion of HY, needs testing
-//    //SingleSample = Measurement.SPIRead24S((uint16_t)HYVRMS);
-//    float HVmeasured=(SingleSample/3766572)*0.5*.5*sqrt(2)*1000;
-//    return HVmeasured;
-//}
-//
-//float HarmonicZVRMSMeasurement(void){ //measures the VRMS in the distortion of HZ,needs testing
-//    //SingleSample = Measurement.SPIRead24S((uint16_t)HZVRMS);
-//    float HVmeasured=(SingleSample/3766572)*0.5*.5*sqrt(2)*1000;
-//    return HVmeasured;
-//}
-//
-//void HarmonicsVReadout(void){//nog fatsoenlijk doormiddel van pointers uit laten poepen
-//	// TODO: Change register read function
-//    float Vrms[54];
-//
-////    uint16_t temp1 = Measurement.SPIRead16((uint16_t)HCONFIG); // 187+4 set the 2 ACTPHSEL bits to 10 for reverence of voltage C (not A B or N)
-////    uint16_t temp2 = temp1 & 0xFF;
-////    temp1 = temp2 + 0x200;
-////    Measurement.SPIWrite16((uint16_t)HCONFIG, temp1);
-//
-//    for(byte i =0; i <= 8; i = i + 3 ){
-//        //Measurement.SPIWrite8((uint16_t)HX, i);
-//        //Measurement.SPIWrite8((uint16_t)HY, i+1);
-//        //Measurement.SPIWrite8((uint16_t)HZ, i+2);
-//
-//        Vrms[i-1] = HarmonicXVRMSMeasurement();
-//        Vrms[i  ] = HarmonicXVRMSMeasurement();
-//        Vrms[i+1] = HarmonicXVRMSMeasurement();
-//
-//
-//    }
-//    //Serial.println("the newline");
-//    //Serial.println("VRMS of upto x Harmonics:");
-//    for(byte i =0; i <= 10; i++){
-//        //Serial.print("  ");
-//        //Serial.print(Vrms[i]);
-//    }
-//
-//}
-//
-
-
 
 #endif /* INC_ADE7880MEASUREMENT_H_ */

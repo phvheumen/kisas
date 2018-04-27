@@ -46,6 +46,10 @@ measurement(this)
 	this->comVerification = comVerification;
 }
 
+ADE7880::~ADE7880(void) {
+
+}
+
 void ADE7880::Begin(void) {
 	this->initGPIO();
 	this->initCommunicationBus();

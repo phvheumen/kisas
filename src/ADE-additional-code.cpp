@@ -3,10 +3,25 @@
 #endif
 #define READ 0x01
 #define WRITE 0x00
+
+#include <HttpClient.h>
+#include "Applications.h"
 //#include <application.h>
 //#include <stdint.h>
 
 
+String hostname = "liandon-meetdata.nl";
+http_request_t request;
+http_response_t response;
+HttpClient http;
+char HTTPHeaderAuthValue[]="Basic MTo2M2Z4VjVkVTlCSWk1ZmV5RmRQWVZqUmFUUzJrUnA1RA==";
+http_header_t headers[] = {
+      { "Content-Type", "application/json" },
+      { "Accept" , "application/json" },
+    { "Accept" , "*/*"},
+    { "Authorization" , (const char *)&HTTPHeaderAuthValue},
+    { NULL, NULL } // NOTE: Always terminate headers will NULL
+};
 /*
 
 //settings for voltage and freqency measurement
@@ -39,7 +54,7 @@ bcm2835_spi_transfern (dummydata, 5); //Write 0x0001 to the Run register
 char dummydata[3] = {READ, APERIOD>>8, APERIOD&0xFF};
 char receivebuffer[5];
 bcm2835_spi_transfernb (dummydata, receivebuffer, 5);
-//3.90625 µs/LSB so 50Hz equals 5120(0x1400) in the receivedata buffer
+//3.90625 us/LSB so 50Hz equals 5120(0x1400) in the receivedata buffer
 printf("freqeuncy register 0x %x %x",receivebuffer[3],receivebuffer[4] );
 
 //voltage measurement
@@ -97,7 +112,7 @@ uint8_t giveRegType(uint16_t RegisterAdress)
     //to call the function belonging to the pointer test: int (*test)(int a, int b);
     
     
-    uint32_t RegisterRange = (RegisterAdress && 0xFF00);
+    uint32_t RegisterRange = (RegisterAdress & 0xFF00);
     uint32_t IndexOffset;
     if (RegisterRange > 0xE300 && RegisterRange < 0xEB00)
     {
@@ -133,8 +148,118 @@ uint8_t giveRegType(uint16_t RegisterAdress)
         }
         
     }
-    
+    //Serial1.print("giveRegType>\t");
+    //Serial1.print(RegisterAdress,DEC);Serial1.print(" ");
+    //Serial1.print(RegisterRange,DEC);Serial1.print(" ");
+    //Serial1.print(IndexOffset,DEC);Serial1.print(" ");
+    //Serial1.println(RegisterTypeArr[RegisterAdress-IndexOffset],DEC);
     return RegisterTypeArr[RegisterAdress-IndexOffset];
    // return 3;
     
 }
+
+
+
+int PostHttp(String body,String url)
+{
+    //Serial1.println();
+    //Serial1.println("PostHttp>\tStart");
+    request.hostname = hostname;
+    request.port = 80;
+    request.path = url;
+    request.body = body;
+    //Serial1.print(request.hostname);Serial1.print(" ");
+    //Serial1.print(request.path);Serial1.print(":");
+    //Serial1.println(request.port);
+
+    //Serial1.println(request.body);
+    //Serial1.println(request.body);
+    noInterrupts();
+    http.post(request, response, headers);
+    interrupts();
+    //Serial1.print("PostHttp>\tResponse status: ");
+    //Serial1.println(response.status);
+    Serial1.print("PostHttp>\tHTTP Response Body: ");
+    Serial1.println(response.body);
+
+    return response.status;
+    //return 200;
+}
+/*
+int PostHttpp(String body,String url)
+{
+    PostHttp(body,url);
+}
+*/
+
+
+
+// Cloud functions must return int and take one String
+int getSettings(String input) {
+    extern ApplicationManager Application;
+
+    noInterrupts();
+    Serial1.println("getSettings>\t called with input("+input+") at time "); Serial1.println(millis());
+    //request.path = "/Kisas/Options.php";
+    int status = PostHttp("{\"Src\":1}","/Kisas/Options.php");
+    if ( status == 200)
+    {
+        //Serial1.println(millis());
+        String NewSettings = response.body;  //"1;2;3;4;5;6;7\r\n";
+        //Serial1.print(NewSettings.length(),DEC);
+        //Serial1.print(">");
+        for (int CharPointer=0;CharPointer<NewSettings.length();)
+        {
+            int EndOfLine = NewSettings.indexOf('\r\n', CharPointer);
+            //Serial1.println(EndOfLine,DEC);
+            //String OneLine = NewSettings.substring(CharPointer, EndOfLine+2);
+            //Serial1.print(OneLine);
+            //Serial1.println(NewSettings.substring(CharPointer, EndOfLine+2));
+            //signed long SettingsArr[8]; // Src,Ptp,Pid,Fmt,Key,Value,DateTime
+            float SettingsArr[8]; // Src,Ptp,Pid,Fmt,Key,Value,DateTime
+            for(int i=0;(CharPointer<EndOfLine+1)&&i<8;i++)
+            {
+                //Serial1.print(i,DEC);
+                //Serial1.print("\t");
+                int EndOfSubstr = NewSettings.indexOf(';', CharPointer);
+                if (EndOfSubstr>EndOfLine || EndOfSubstr == -1)
+                {
+                    EndOfSubstr = EndOfLine-1;
+                }
+
+                //Serial1.print(EndOfSubstr,DEC);Serial1.print("\t");
+                //Serial1.print(value);
+                //Serial1.print(NewSettings.substring(CharPointer, EndOfSubstr));
+                //Serial1.print("\t");
+                SettingsArr[i] = (NewSettings.substring(CharPointer, EndOfSubstr)).toFloat();
+               // Serial1.println(SettingsArr[i],DEC);
+                CharPointer = EndOfSubstr+1;
+            }
+            //Serial1.println(EndOfLine,DEC);
+            CharPointer = EndOfLine+1;
+            //Serial1.println(CharPointer,DEC);
+            //Serial1.print(NewSettings.charAt(CharPointer-3));
+            //Serial1.print(NewSettings.charAt(CharPointer-2));
+            //Serial1.print(NewSettings.charAt(CharPointer-1));
+            //Serial1.print(NewSettings.charAt(CharPointer-0));
+            //Serial1.print(NewSettings.charAt(CharPointer+1));
+            //Serial1.println(NewSettings.charAt(CharPointer+2));
+            Serial1.println("goto Application.parseSetting");
+            Application.parseSetting(SettingsArr,sizeof(SettingsArr)/sizeof(SettingsArr[0]));
+        }
+    }
+    else
+    {
+        Serial1.print("getSettings>\t failed -");
+        Serial1.println(status,DEC);
+    }
+    //request.path = "/Kisas/Post.php";
+    Serial1.println(millis());
+    Serial1.println(request.path);
+    Serial1.print("getSettings>\t exit");
+    interrupts();
+
+    return 1;
+}
+
+

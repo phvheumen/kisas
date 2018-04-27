@@ -40,6 +40,17 @@ public:
 	void setPGAGain(PGA_t PGA, PGA_Gain_t gain);
 	PGA_Gain_t getPGAGain(PGA_t PGA);
 
+	uint32_t getWHourThreshold();
+	void setWHourThreshold(uint32_t threshold);
+
+	uint32_t getVARHourThreshold();
+	void setVARHourThreshold(uint32_t threshold);
+
+	uint32_t getVAHourThreshold();
+	void setVAHourThreshold(uint32_t threshold);
+
+	bool wattHourResetRead();
+
 	/*
 	 * User defined operators
 	 */

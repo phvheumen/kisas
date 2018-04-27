@@ -15,6 +15,10 @@ ADE7880Measurement::ADE7880Measurement(ADE7880 * parent) {
 	this->_parent = parent;
 	std::fill(std::begin(this->currentSensorGain), std::end(this->currentSensorGain), 1.0f);
 	std::fill(std::begin(this->voltageSensorGain), std::end(this->voltageSensorGain), 1.0f);
+	this->activeTotalEnergyAccum = 0.0f;
+	this->activeFundamentalEnergyAccum = 0.0f;
+	this->reactiveFundamentalEnergyAccum = 0.0f;
+	this->apparentTotalEnergyAccum = 0.0f;
 }
 
 /**
@@ -422,34 +426,183 @@ float ADE7880Measurement::Stotal(Phase_t phase) {
 		return 0.0f;
 	}
 
-	uint32_t pMax = 27059678 >> 4;
+	const uint32_t pMax = 27059678 >> 4;
 	float powerFS = this->getPowerFS(phase);
 
 	return powerFS * ( (float) power_raw ) / (float) pMax;
 }
 
-////write to WTHR to change accuracy of CWATTHR
-//float xWATTHRMeasurement(byte RegisterX){
-//	// TODO: Change register read function
-//    //SingleSample = Measurement.SPIRead32S(((uint16_t)AWATTHR+RegisterX));
-//    float WATTMeasured=(SingleSample/123456789); //still arbitrairy numer, need to calculate well (oa eq 26 from datasheet ADE7880)
-//    return WATTMeasured;
-//}       //DONE float fetch xWATTHR //total active engergy accumulation
-//
-//float xFWATTHRMeasurement(byte RegisterX){
-//	// TODO: Change register read function
-//    //SingleSample = Measurement.SPIRead32S(((uint16_t)AFWATTHR+RegisterX));
-//    float WATTMeasured=(SingleSample/123456789); //still arbitrairy numer, need to calculate well (oa eq x from datasheet ADE7880)
-//    return WATTMeasured;
-//}       //DONE float fetch xFWATTHR //Fundemental active energy accumulation
-//
-//float xVARHRMeasurement(byte RegisterX){
-//	// TODO: Change register read function
-//    //SingleSample = Measurement.SPIRead32S(((uint16_t)AFVARHR+RegisterX));
-//    float VARMeasured=(SingleSample/123456789); //still arbitrairy numer, need to calculate well (oa eq x from datasheet ADE7880)
-//    return VARMeasured;
-//}
-//
+float ADE7880Measurement::activeEnergyTotal(Phase_t phase) {
+	uint16_t registerAddress;
+
+	switch (phase) {
+	case PHASE_A:
+		registerAddress = AWATTHR;
+		break;
+	case PHASE_B:
+		registerAddress = BWATTHR;
+		break;
+	case PHASE_C:
+		registerAddress = CWATTHR;
+		break;
+	default:
+		return 0.0f;
+	}
+
+	int32_t energy_raw;
+	if ( !this->_parent->regRead32S(registerAddress, energy_raw)){
+		return 0.0f;
+	}
+
+	const uint32_t pMax = 27059678;
+	const float fs = 1024e6;
+	float powerFS = this->getPowerFS(phase);
+	uint32_t wattHourThreshold = this->_parent->settings.getWHourThreshold();
+
+	float activeEnergyTotal = ( energy_raw * ((float) wattHourThreshold) * powerFS ) / ( fs * 3600 * pMax );
+
+	/*
+	 * Check if read-with-reset is enabled. If enabled we just accumulate value to internal counter of measurement class.
+	 * If not, we have to accumulate the difference with a previous measurement;
+	 */
+	if( this->_parent->settings.wattHourResetRead() ) {
+		this->activeTotalEnergyAccum += activeEnergyTotal;
+	} else {
+		//TODO: Handle the case read-with-reset is disabled
+		return 0.0f;
+	}
+
+	return this->activeTotalEnergyAccum;
+}
+
+float ADE7880Measurement::activeEnergyFundamental(Phase_t phase) {
+	uint16_t registerAddress;
+
+	switch (phase) {
+	case PHASE_A:
+		registerAddress = AFWATTHR;
+		break;
+	case PHASE_B:
+		registerAddress = BFWATTHR;
+		break;
+	case PHASE_C:
+		registerAddress = CFWATTHR;
+		break;
+	default:
+		return 0.0f;
+	}
+
+	int32_t energy_raw;
+	if ( !this->_parent->regRead32S(registerAddress, energy_raw)){
+		return 0.0f;
+	}
+
+	const uint32_t pMax = 27059678;
+	const float fs = 1024e6;
+	float powerFS = this->getPowerFS(phase);
+	uint32_t wattHourThreshold = this->_parent->settings.getWHourThreshold();
+
+	float activeEnergyFundamental = ( energy_raw * ((float) wattHourThreshold) * powerFS ) / ( fs * 3600 * pMax );
+
+	/*
+	 * Check if read-with-reset is enabled. If enabled we just accumulate value to internal counter of measurement class.
+	 * If not, we have to accumulate the difference with a previous measurement;
+	 */
+	if( this->_parent->settings.wattHourResetRead() ) {
+		this->activeFundamentalEnergyAccum += activeEnergyFundamental;
+	} else {
+		//TODO: Handle the case read-with-reset is disabled
+		return 0.0f;
+	}
+
+	return this->activeFundamentalEnergyAccum;
+}
+
+float ADE7880Measurement::reactiveEnergyFundamental(Phase_t phase) {
+	uint16_t registerAddress;
+
+	switch (phase) {
+	case PHASE_A:
+		registerAddress = AFVARHR;
+		break;
+	case PHASE_B:
+		registerAddress = BFVARHR;
+		break;
+	case PHASE_C:
+		registerAddress = CFVARHR;
+		break;
+	default:
+		return 0.0f;
+	}
+
+	int32_t energy_raw;
+	if ( !this->_parent->regRead32S(registerAddress, energy_raw)){
+		return 0.0f;
+	}
+
+	const uint32_t pMax = 27059678;
+	const float fs = 1024e6;
+	float powerFS = this->getPowerFS(phase);
+	uint32_t varHourThreshold = this->_parent->settings.getVARHourThreshold();
+
+	float reactiveEnergyFundamental = ( energy_raw * ((float) varHourThreshold) * powerFS ) / ( fs * 3600 * pMax );
+
+	/*
+	 * Check if read-with-reset is enabled. If enabled we just accumulate value to internal counter of measurement class.
+	 * If not, we have to accumulate the difference with a previous measurement;
+	 */
+	if( this->_parent->settings.wattHourResetRead() ) {
+		this->reactiveFundamentalEnergyAccum += reactiveEnergyFundamental;
+	} else {
+		//TODO: Handle the case read-with-reset is disabled
+		return 0.0f;
+	}
+
+	return this->reactiveFundamentalEnergyAccum;
+}
+
+float ADE7880Measurement::apparentEnergyTotal(Phase_t phase) {
+	uint16_t registerAddress;
+
+	switch (phase) {
+	case PHASE_A:
+		registerAddress = AVAHR;
+		break;
+	case PHASE_B:
+		registerAddress = BVAHR;
+		break;
+	case PHASE_C:
+		registerAddress = CVAHR;
+		break;
+	default:
+		return 0.0f;
+	}
+
+	int32_t energy_raw;
+	if ( !this->_parent->regRead32S(registerAddress, energy_raw)){
+		return 0.0f;
+	}
+
+	const uint32_t pMax = 27059678;
+	const float fs = 1024e6;
+	float powerFS = this->getPowerFS(phase);
+	uint32_t vaHourThreshold = this->_parent->settings.getVAHourThreshold();
+
+	float apparentEnergyFundamental = ( energy_raw * ((float) vaHourThreshold) * powerFS ) / ( fs * 3600 * pMax );
+
+	/*
+	 * Check if read-with-reset is enabled. If enabled we just accumulate value to internal counter of measurement class.
+	 * If not, we have to accumulate the difference with a previous measurement;
+	 */
+	if( this->_parent->settings.wattHourResetRead() ) {
+		this->apparentTotalEnergyAccum += apparentEnergyFundamental;
+	} else {
+		//TODO: Handle the case read-with-reset is disabled
+		return 0.0f;
+	}
+
+	return this->apparentTotalEnergyAccum;
+}
 
 /**
 	Sets the sensor gain for the current channels. The gain should be strictly positive.
