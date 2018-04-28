@@ -2,32 +2,63 @@
 #include <HttpClient.h>
 #include "math.h"
 
-class ApplicationManager; //forward declare
+/* Defines */
+#define ENABLE_APP_MSG
 
-class StandardAppFunctions
+/* MACROS */
+/**
+	The application message macro's should only be used inside the Application class and its children
+	Define ENABLE_APP_MSG to enable messages from the applications.
+ */
+#ifdef ENABLE_APP_MSG
+	#define APP_MSG(x) {\
+	Serial.printf("[%8.3f] ", ((float) millis() )/1000);\
+	Serial.printlnf(x);\
+	}
+#else
+	#define APP_MSG(x)
+#endif
+
+#ifdef ENABLE_APP_MSG
+	#define APP_MSG_FORMATTED(x, y) {\
+	Serial.printf("[%8.3f] ", ((float) millis() )/1000);\
+	Serial.printlnf(x, y);\
+	}
+#else
+	#define APP_MSG_FORMATTED(x, y)
+#endif
+
+class ApplicationManager; // Forward declare
+
+class Application
 {
 public:
-    StandardAppFunctions();
-    ~StandardAppFunctions();
+	Application();
+    Application(String systemID, String applicationID, String messageFormatID);
+    Application(unsigned int systemID, unsigned int applicationID, unsigned int messageFormatID);
+    ~Application();
 
+    void printApplicationInstance(void);
 
+    int httpPostRequest(String body);
+    void setHttpHost(String host, String path, unsigned int port);
+    void setHttpHost(IPAddress ip, String path, unsigned int port);
 
-    //TCPClient client;
+protected:
+    HttpClient 		httpClient;
+	http_request_t 	httpRequest;
+	http_response_t httpResponse;
+	http_header_t	httpHeader[16];
 
-    bool GeneralMessageFormat=0;
-    unsigned long DeviceIdentifier=277;
-    int PostHttp(String body);
-    HttpClient http;
-    http_request_t request;
-    http_response_t response;
-
-    //char HTTPHeaderAuthValue[55]="Basic MTo2M2Z4VjVkVTlCSWk1ZmV5RmRQWVZqUmFUUzJrUnA1RA==";
+    String systemID;		// Unique identifier for each Particle/KISAS sensor
+	String applicationID;	// Unique identifier for each application
+	String messageFormatID; // Identify the message format. In this way the overhead of sending field names can be avoided
 private:
 
 };
 
 /* ---- Time-averaging Application ---- */
-class TmAverage : public StandardAppFunctions
+class TmAverage : public Application
 {
   public:
   TmAverage();
@@ -44,10 +75,13 @@ class TmAverage : public StandardAppFunctions
 
  // void init(ApplicationManager& AppManPtr);
   void init();
-
   Timer updateTimer;
 
   private:
+  ApplicationManager* Manager;
+
+
+
   Timer sendTimer;
   uint16_t VarList[101]={0x43C3,0xE906,0};
   uint32_t NumSamplesList[101];
@@ -55,16 +89,14 @@ class TmAverage : public StandardAppFunctions
   bool InNummeratorList[101]={1,0,0};
   float ScalingList[101]={0.0031288697042764067,256000,0};
   float AverageList[101]={0,0,0};//;
-  ApplicationManager* Manager;
 
-  uint8_t PresentPowerMode;
-  bool CommunicationMode;
+
 };
 
 //Simple Scope, using variables of Particle Cloud
 //the scope is currently blokking (for 37 miliseconds)
 //would be nice make it non-blocking
-class SmplScope : public StandardAppFunctions
+class SmplScope : public Application
 {
   public:
   SmplScope();  //constructor ////:varlist(){}
@@ -95,30 +127,14 @@ class SmplScope : public StandardAppFunctions
 class ApplicationManager
 {
 public:
-//ApplicationManager& func (void)
-//{
-   // Some processing
-//   return *this;
-//}
-  TmAverage TimeAverage;
-  //SmplScope SimpleScope;
+	ApplicationManager();
+	~ApplicationManager();
 
+	TmAverage TimeAverage;
+	//SmplScope SimpleScope;
 
-  void parseSetting(float * SettingsArr, int Length);
-
-   // void test(void){Serial1.println("ApplicationManager.test>\t ok");}
-    /* Reference to the calling object can be returned */
-
+	void parseSetting(float * SettingsArr, int Length);
 private:
-
-  //Timer te(1000, &SmplScope::update, ApplicationManager.SimpleScope);
-  /*void writeCommand(uint8_t cmd[], size_t cmdLen);
-  bool readReply(uint8_t replyBuf[], size_t replyBufLen);
-  uint8_t _mbSlaveId;
-  uint8_t _i2cSlaveAddr;
-  uint8_t _retryCount;*/
-  //uint8_t PresentPowerMode;
-  bool CommunicationMode;
 
 };
 

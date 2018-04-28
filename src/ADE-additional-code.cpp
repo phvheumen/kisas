@@ -196,68 +196,68 @@ int PostHttpp(String body,String url)
 
 // Cloud functions must return int and take one String
 int getSettings(String input) {
-    extern ApplicationManager Application;
-
-    noInterrupts();
-    Serial1.println("getSettings>\t called with input("+input+") at time "); Serial1.println(millis());
-    //request.path = "/Kisas/Options.php";
-    int status = PostHttp("{\"Src\":1}","/Kisas/Options.php");
-    if ( status == 200)
-    {
-        //Serial1.println(millis());
-        String NewSettings = response.body;  //"1;2;3;4;5;6;7\r\n";
-        //Serial1.print(NewSettings.length(),DEC);
-        //Serial1.print(">");
-        for (int CharPointer=0;CharPointer<NewSettings.length();)
-        {
-            int EndOfLine = NewSettings.indexOf('\r\n', CharPointer);
-            //Serial1.println(EndOfLine,DEC);
-            //String OneLine = NewSettings.substring(CharPointer, EndOfLine+2);
-            //Serial1.print(OneLine);
-            //Serial1.println(NewSettings.substring(CharPointer, EndOfLine+2));
-            //signed long SettingsArr[8]; // Src,Ptp,Pid,Fmt,Key,Value,DateTime
-            float SettingsArr[8]; // Src,Ptp,Pid,Fmt,Key,Value,DateTime
-            for(int i=0;(CharPointer<EndOfLine+1)&&i<8;i++)
-            {
-                //Serial1.print(i,DEC);
-                //Serial1.print("\t");
-                int EndOfSubstr = NewSettings.indexOf(';', CharPointer);
-                if (EndOfSubstr>EndOfLine || EndOfSubstr == -1)
-                {
-                    EndOfSubstr = EndOfLine-1;
-                }
-
-                //Serial1.print(EndOfSubstr,DEC);Serial1.print("\t");
-                //Serial1.print(value);
-                //Serial1.print(NewSettings.substring(CharPointer, EndOfSubstr));
-                //Serial1.print("\t");
-                SettingsArr[i] = (NewSettings.substring(CharPointer, EndOfSubstr)).toFloat();
-               // Serial1.println(SettingsArr[i],DEC);
-                CharPointer = EndOfSubstr+1;
-            }
-            //Serial1.println(EndOfLine,DEC);
-            CharPointer = EndOfLine+1;
-            //Serial1.println(CharPointer,DEC);
-            //Serial1.print(NewSettings.charAt(CharPointer-3));
-            //Serial1.print(NewSettings.charAt(CharPointer-2));
-            //Serial1.print(NewSettings.charAt(CharPointer-1));
-            //Serial1.print(NewSettings.charAt(CharPointer-0));
-            //Serial1.print(NewSettings.charAt(CharPointer+1));
-            //Serial1.println(NewSettings.charAt(CharPointer+2));
-            Serial1.println("goto Application.parseSetting");
-            Application.parseSetting(SettingsArr,sizeof(SettingsArr)/sizeof(SettingsArr[0]));
-        }
-    }
-    else
-    {
-        Serial1.print("getSettings>\t failed -");
-        Serial1.println(status,DEC);
-    }
-    //request.path = "/Kisas/Post.php";
-    Serial1.println(millis());
-    Serial1.println(request.path);
-    Serial1.print("getSettings>\t exit");
-    interrupts();
+//    extern ApplicationManager application;
+//
+//    noInterrupts();
+//    Serial1.println("getSettings>\t called with input("+input+") at time "); Serial1.println(millis());
+//    //request.path = "/Kisas/Options.php";
+//    int status = PostHttp("{\"Src\":1}","/Kisas/Options.php");
+//    if ( status == 200)
+//    {
+//        //Serial1.println(millis());
+//        String NewSettings = response.body;  //"1;2;3;4;5;6;7\r\n";
+//        //Serial1.print(NewSettings.length(),DEC);
+//        //Serial1.print(">");
+//        for (int CharPointer=0;CharPointer<NewSettings.length();)
+//        {
+//            int EndOfLine = NewSettings.indexOf('\r\n', CharPointer);
+//            //Serial1.println(EndOfLine,DEC);
+//            //String OneLine = NewSettings.substring(CharPointer, EndOfLine+2);
+//            //Serial1.print(OneLine);
+//            //Serial1.println(NewSettings.substring(CharPointer, EndOfLine+2));
+//            //signed long SettingsArr[8]; // Src,Ptp,Pid,Fmt,Key,Value,DateTime
+//            float SettingsArr[8]; // Src,Ptp,Pid,Fmt,Key,Value,DateTime
+//            for(int i=0;(CharPointer<EndOfLine+1)&&i<8;i++)
+//            {
+//                //Serial1.print(i,DEC);
+//                //Serial1.print("\t");
+//                int EndOfSubstr = NewSettings.indexOf(';', CharPointer);
+//                if (EndOfSubstr>EndOfLine || EndOfSubstr == -1)
+//                {
+//                    EndOfSubstr = EndOfLine-1;
+//                }
+//
+//                //Serial1.print(EndOfSubstr,DEC);Serial1.print("\t");
+//                //Serial1.print(value);
+//                //Serial1.print(NewSettings.substring(CharPointer, EndOfSubstr));
+//                //Serial1.print("\t");
+//                SettingsArr[i] = (NewSettings.substring(CharPointer, EndOfSubstr)).toFloat();
+//               // Serial1.println(SettingsArr[i],DEC);
+//                CharPointer = EndOfSubstr+1;
+//            }
+//            //Serial1.println(EndOfLine,DEC);
+//            CharPointer = EndOfLine+1;
+//            //Serial1.println(CharPointer,DEC);
+//            //Serial1.print(NewSettings.charAt(CharPointer-3));
+//            //Serial1.print(NewSettings.charAt(CharPointer-2));
+//            //Serial1.print(NewSettings.charAt(CharPointer-1));
+//            //Serial1.print(NewSettings.charAt(CharPointer-0));
+//            //Serial1.print(NewSettings.charAt(CharPointer+1));
+//            //Serial1.println(NewSettings.charAt(CharPointer+2));
+//            Serial1.println("goto Application.parseSetting");
+//            application.parseSetting(SettingsArr,sizeof(SettingsArr)/sizeof(SettingsArr[0]));
+//        }
+//    }
+//    else
+//    {
+//        Serial1.print("getSettings>\t failed -");
+//        Serial1.println(status,DEC);
+//    }
+//    //request.path = "/Kisas/Post.php";
+//    Serial1.println(millis());
+//    Serial1.println(request.path);
+//    Serial1.print("getSettings>\t exit");
+//    interrupts();
 
     return 1;
 }

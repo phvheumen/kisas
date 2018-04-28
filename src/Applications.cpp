@@ -7,6 +7,106 @@
 #include <HttpClient.h>
 #include <string.h>
 
+Application::Application() {
+	this->systemID = String(0);
+	this->applicationID = String(0);
+	this->messageFormatID = String(0);
+
+	APP_MSG("Application> Warning: Constructor with no arguments called")
+	this->printApplicationInstance();
+}
+
+Application::Application(String systemID, String applicationID, String messageFormatID) {
+	this->systemID = systemID;
+	this->applicationID = applicationID;
+	this->messageFormatID = messageFormatID;
+
+	this->printApplicationInstance();
+}
+
+Application::Application(unsigned int systemID, unsigned int applicationID, unsigned int messageFormatID) {
+	this->systemID = String(systemID);
+	this->applicationID = String(applicationID);
+	this->messageFormatID = String(messageFormatID);
+
+	this->printApplicationInstance();
+}
+
+void Application::printApplicationInstance(void) {
+	APP_MSG_FORMATTED("Application> systemID: \"%s\"", this->systemID.c_str());
+	APP_MSG_FORMATTED("Application> applicationID: \"%s\"", this->applicationID.c_str());
+	APP_MSG_FORMATTED("Application> messageFormatID: \"%s\"", this->messageFormatID.c_str());
+}
+
+Application::~Application() {
+
+}
+
+void Application::setHttpHost(String host, String path, unsigned int port=80) {
+	this->httpRequest.ip = IPAddress(0,0,0,0);
+	this->httpRequest.hostname = host;
+	this->httpRequest.port = port;
+	this->httpRequest.path = path;
+}
+
+void Application::setHttpHost(IPAddress ip, String path, unsigned int port=80) {
+	this->httpRequest.ip = ip;
+	this->httpRequest.hostname = "";
+	this->httpRequest.port = port;
+	this->httpRequest.path = path;
+}
+
+int Application::httpPostRequest(String body)
+{
+	APP_MSG("Application> HTTP Post request")
+
+	this->httpHeader[0] = { "Content-Type", "application/json" };
+	this->httpHeader[1] = { "Accept" , "application/json" };
+	this->httpHeader[2] = { "Accept" , "*/*"};
+	this->httpHeader[3] = { "Authorization" , "Basic MTo2M2Z4VjVkVTlCSWk1ZmV5RmRQWVZqUmFUUzJrUnA1RA=="};
+	this->httpHeader[4] = { NULL, NULL }; // NOTE: Always terminate headers with NULL
+
+	/* Check if host, port, headers are set properly */
+	if ( this->httpRequest.hostname == "" && this->httpRequest.ip == (uint32_t)0 ) {
+		APP_MSG("httpPostRequest> Error: host not set");
+		return -1;
+	}
+
+	/* Check for empty header */
+	if( this->httpHeader[0].header == NULL ) {
+		APP_MSG("httpPostRequest> Warning: header empty");
+	}
+
+	/* Fill body */
+	this->httpRequest.body = "Hello, world!";
+
+	/* Send request and wait for response */
+	APP_MSG_FORMATTED("httpPostRequest> Request host: %s", this->httpRequest.hostname.c_str());
+	APP_MSG_FORMATTED("httpPostRequest> Request port: %d", this->httpRequest.port);
+	APP_MSG_FORMATTED("httpPostRequest> Request path: %s", this->httpRequest.path.c_str());
+	APP_MSG("httpPostRequest> Send request");
+
+	this->httpClient.post(this->httpRequest, this->httpResponse, this->httpHeader);
+
+	APP_MSG_FORMATTED("httpPostRequest> Response status: %d", this->httpResponse.status);
+	APP_MSG_FORMATTED("httpPostRequest> Response body: %s", this->httpResponse.body.c_str());
+
+	return this->httpResponse.status;
+}
+
+ApplicationManager::ApplicationManager() :
+		TimeAverage(this)
+{
+	APP_MSG("ApplicationManger> Started");
+}
+
+ApplicationManager::~ApplicationManager() {
+
+}
+
+
+
+
 extern uint8_t RegisterTypeArr[];
 extern uint8_t giveRegType(uint16_t RegisterAdress);
 extern String PostBuffer;
@@ -14,21 +114,11 @@ extern String PostBuffer;
 //-------------------------------------------------Time averageing-------------------------------------------
 
 TmAverage::TmAverage(ApplicationManager * _Manager) :
+		Application("Particle", "TmAverage", String(0)),
 		updateTimer(1000, &TmAverage::update, *this),
 		sendTimer(900000, &TmAverage::SendMessage, *this)
 {
 	Manager = _Manager;
-	PresentPowerMode = 0;
-	CommunicationMode = false;
-}
-
-TmAverage::TmAverage()  :
-		updateTimer(1000, &TmAverage::update, *this),
-		sendTimer(900000, &TmAverage::SendMessage, *this)
-{
-	Manager = nullptr;
-	PresentPowerMode = 0;
-	CommunicationMode = false;
 }
 
 TmAverage::~TmAverage() {
@@ -37,6 +127,7 @@ TmAverage::~TmAverage() {
 
 
 void TmAverage::init() {
+	APP_MSG("TmAverage> Initialise")
 	updateTimer.start();
 	sendTimer.start();
 }
@@ -132,7 +223,7 @@ Serial.print("free memory: ");
 Serial.println(freemem);
 
 //updateTimer.stopFromISR();
-    //this->PostHttp(total);
+    //this->httpPostRequest(total);
     PostBuffer = total;
 //updateTimer.startFromISR();
     //PostHttpp(MessageHeader+MessageBody+"]}","/Kisas/Post.php");
@@ -424,101 +515,6 @@ void SmplScope::update()
 
 void SmplScope::parseSetting(float * SettingsArr, int Length)
 {
-}
-
-//--------------------------------------------------------Standard App functions---------------------------------------
-
-/*
-bool StandardAppFunctions::sendMessagePack(String Message){
-//Messagepack is not supported yet, only type 0/JSON is implemented now
-}*/
-
-int StandardAppFunctions::PostHttp(String body)
-{
-    noInterrupts();
-        http_header_t headers[] = {
-      { "Content-Type", "application/json" },
-      { "Accept" , "application/json" },
-    { "Accept" , "*/*"},
-    { "Authorization" , "Basic MTo2M2Z4VjVkVTlCSWk1ZmV5RmRQWVZqUmFUUzJrUnA1RA=="},
-    { NULL, NULL } // NOTE: Always terminate headers will NULL
-};
-Serial.println(response.body);
-    /*noInterrupts();
-    Serial.println();
-    Serial.println("PostHttp>\tStart of PostHttp.");
-    this->request.hostname = "liandon-meetdata.nl";
-    this->request.port = 80;
-    this->request.path = "/Kisas/Post.php";
-    this->request.body = body;
-    //Serial.println(request.body);
-    this->http.post(request, response, headers);
-    Serial.print("PostHttp>\tResponse status: ");
-    Serial.println(this->response.status);
-    Serial.print("PostHttp>\tHTTP Response Body: ");
-    Serial.println(this->response.body);
-    Serial.println("PostHttp>\tEnd of PostHttp.");
-    interrupts();
-    */
-    //return response.status;
-    Serial.println(String(body.length()) );
-    String HeaderCombined = "POST /Kisas/Post.php HTTP/1.0\r\nConnection: close\r\nHOST: liandon-meetdata.nl\r\nContent-Length: " + String(body.length()) + "\r\n";
-    HeaderCombined += "Authorization: Basic MTo2M2Z4VjVkVTlCSWk1ZmV5RmRQWVZqUmFUUzJrUnA1RA==\r\n";
-
-    Serial.println(HeaderCombined);
-   /// delay(1000);
-    Serial.println(body);
-    //Serial.flush();
-   // delay(1000);
- //   uint32_t freemem = System.freeMemory();
-//Serial.print("free memory: ");
-//Serial.println(freemem);
-//Serial.flush();
-String server = "liandon-meetdata.nl";
-    bool connected = false;
-//    connected = client.connect(server.c_str(), 80 );
-    Serial.println("connected: ");
-    Serial.println(connected,DEC);
-//     freemem = System.freeMemory();
-//Serial.print("free memory: ");
-//Serial.println(freemem);
-//Serial.flush();
-//    client.println(HeaderCombined);
-//    client.flush();
- //    freemem = System.freeMemory();
-//Serial.print("free memory: ");
-//Serial.println(freemem);
-//Serial.flush();
-//    client.println(body);
-//    client.flush();
- //    freemem = System.freeMemory();
-//Serial.print("free memory: ");
-//Serial.println(freemem);
-//Serial.flush();
-//    unsigned long timeout=millis()+10000;
-//    while (millis()<timeout && client.connected())
-//    {
-//        if (client.available())
-//        {
-//            char c = client.read();
-//        }
-//    }
-//    client.stop();
-//     Serial.print(">>>>");
-//    Serial.println(response.body);
-//       Serial.print("<<<<");
-//    interrupts();
-//    return 200;
-}
-
-//Constructor, used for initialization
-StandardAppFunctions::StandardAppFunctions()
-{
-
-    Serial.println("StandardAppFunctions>\t Constructor completed...");
-}
-
-StandardAppFunctions::~StandardAppFunctions() {
 }
 
 void ApplicationManager::parseSetting(float * SettingsArr, int Length)

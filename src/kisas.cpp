@@ -35,24 +35,40 @@ SYSTEM_MODE(SEMI_AUTOMATIC);
 //ADE7880 * ade7880 = new ADE7880(&SPI, SS_HSA, RESETINV, true);
 //ADE7880 * ade7880 = new ADE7880(&Wire, RESETINV, true);
 ADE7880 * ade7880 = new ADE7880(&SPI, &Wire, SS_HSA, RESETINV, false);
-
+ApplicationManager * apps;
 
 /* Defines */
 #define PARTICLE_CLOUD_TO_MS	20000
+#define ENABLE_BOOT_MSG
 
 /* MACROS */
-#define BOOT_MSG(x) Serial.printlnf("[%7.3f] %s", ((float) millis() )/1000, x);
+#ifdef ENABLE_BOOT_MSG
+	#define BOOT_MSG(x) {\
+	Serial.printf("[%8.3f] ", ((float) millis() )/1000);\
+	Serial.printlnf(x);\
+	}
+#else
+	#define BOOT_MSG(x)
+#endif
+
+#ifdef ENABLE_BOOT_MSG
+	#define BOOT_MSG_FORMATTED(x, y) {\
+	Serial.printf("[%8.3f] ", ((float) millis() )/1000);\
+	Serial.printlnf(x, y);\
+	}
+#else
+	#define BOOT_MSG_FORMATTED(x,y)
+#endif
 
 /* Forward declarations */
 void particleConnectTimeOutCallback(void);
 int getSettings(String input);
 
 /* Variable declarations/definitions */
-ADE7880 Measurement(&SPI, &Wire, SS_HSA, RESETINV, false);
-ApplicationManager Application;
+ADE7880 Measurement(&SPI, &Wire, SS_HSA, RESETINV, false); //TODO: Remove this one
 Timer particleConnectTimeOut(PARTICLE_CLOUD_TO_MS, particleConnectTimeOutCallback, true);
 String ossil = "0a-53a-104a-150a-190a-221a-243a-254a-254a-243a-221a-190a-150a-104a-53a0a53a104a150a190a221a243a254a254a243a221a190a150a104a53a0";
-String PostBuffer="";
+String PostBuffer=""; //TODO: Remove this one
 
 // HttpClient
 unsigned int nextTime = 0;    // Next time to contact the server
@@ -76,8 +92,6 @@ http_response_t _response;
 #pragma GCC optimize ("O0")
 void setup()
 {
-	char msg[64];
-
 	Serial.begin(115200);   // open serial over USB
 	/* On Windows it will be necessary to implement the following line:
 	 * Make sure your Serial Terminal app is closed before powering your device
@@ -96,6 +110,7 @@ void setup()
 	 */
 	Serial.printlnf("Particle system version: %s", System.version().c_str());
 	Serial.printlnf("Free memory: %d Bytes", System.freeMemory());
+	Serial.printlnf("Device ID: %s", System.deviceID().c_str());
 	Serial.println("");
 
 	/*
@@ -119,8 +134,7 @@ void setup()
 	BOOT_MSG("Cellular: connected");
 
 	while(!Cellular.ready() || Cellular.localIP() == (uint32_t)0) Particle.process();
-	sprintf(msg, "Cellular: IP adress available [%s]", Cellular.localIP().toString().c_str());
-	BOOT_MSG(msg);
+	BOOT_MSG_FORMATTED("Cellular: IP adress available [%s]", Cellular.localIP().toString().c_str());
 
 	/*
 	 * Connect to particle cloud
@@ -149,38 +163,8 @@ void setup()
 	 * Initialising ADE7880
 	 */
 	BOOT_MSG("Initialising ADE7880");
+	ade7880->Begin();
 
-	/*
-	 * Initialise HttpClient
-	 */
-	BOOT_MSG("Initialise HttpClient");
-	_request.hostname = "requestbin.net";
-	_request.port = 80;
-	_request.path = "/r/qnd06rqn";
-//	_request.body = String("{\"key\":\"value\", \"var\":\"hello, wolrd!\", \"integer\":57 }");
-
-	/*
-	 * Initialising applications
-	 */
-	BOOT_MSG("Starting applications");
-
-//	BOOT_MSG("SimpleScope")
-//	Application.SimpleScope.init();
-//	BOOT_MSG("SimpleScope started")
-
-//	BOOT_MSG("TimeAverage");
-//	Application.TimeAverage.init();
-//	BOOT_MSG("TimeAverage started");
-
-	//Timer te(1000, &SmplScope::update, Application.SimpleScope);
-
-	BOOT_MSG("Boot complete");
-
-	Serial.printlnf("");
-	Serial.printlnf("Free memory: %d Bytes", System.freeMemory());
-
-//	ade7880->Begin();
-//
 //	/* Configure HSDC (See table 52 in data sheet) */
 //	uint8_t reg8= 0x0;
 //	reg8 |= (0x1 << 0); // CLK is 4 MHz
@@ -201,6 +185,20 @@ void setup()
 //		volatile float freq = ade7880->measurement.frequency(ADE7880Measurement::PHASE_A);
 //		volatile float per = ade7880->measurement.period(ADE7880Measurement::PHASE_A);
 //	}
+
+	/*
+	 * Initialising applications
+	 */
+	BOOT_MSG("Starting application manager");
+	apps = new ApplicationManager;
+	apps->TimeAverage.setHttpHost("requestbin.net", "/r/1l9mawu1", 80);
+//	apps->TimeAverage.init();
+
+	BOOT_MSG("Boot complete");
+
+	Serial.printlnf("");
+	Serial.printlnf("Free memory: %d Bytes", System.freeMemory());
+	Serial.printlnf("");
 }
 #pragma GCC pop_options
 
@@ -208,16 +206,9 @@ void loop() {
 	if (nextTime > millis()) {
 		return;
 	}
-//	_http.post(_request, _response, _headers);
+	apps->TimeAverage.httpPostRequest("Hello, world!");
 
-	_http.get(_request, _response, _headers);
-	Serial.print("Application>\tResponse status: ");
-	Serial.println(_response.status);
-
-	Serial.print("Application>\tHTTP Response Body: ");
-	Serial.println(_response.body);
-
-	nextTime = millis() + 5000;
+	nextTime = millis() + 2000;
 }
 
 void particleConnectTimeOutCallback(void)
