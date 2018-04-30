@@ -205,32 +205,21 @@ void ADE7880::initADE7880(void) {
 		this->regRead24S(AIGAIN, reg32s);
 	}
 
+	/* Configure HSDC */
+	{
+		/* Configure HSDC (See table 52 in data sheet) */
+		uint8_t reg8= 0x0;
+		reg8 |= (0x1 << 0); // CLK is 4 MHz
+		reg8 |= (0x1 << 3); // Only send voltage and currents
+		this->regWrite8(HSDC_CFG, reg8);
 
+		// Enable HSDC
+		uint16_t reg16;
+		this->regRead16(CONFIG, reg16);
+		reg16 |= (1<<6); // Enable HSDC
+		this->regWrite16(CONFIG, reg16);
+	}
 
-
-
-//	this-regWrite16(GAIN, 0b0000000011011011); //Select the PGA gains in the phase currents, voltages and neutral current channels//gain 8 gain 8 gain 8
-//
-//	this-regWrite16(CFMODE, 0x00A0);  //turn on CF1,2,3 pins (default is turn of with register value 0x0EA0)
-//	this-regWrite16(CF1DEN, 0x000A); // CF1DEN factor 10 is waarom kan deze niet op 1??? --> TODO controleer de puluitgang CF1
-//	this-regWrite16(CF2DEN, 0x000A); // CF2DEN factor 10 is waarom kan deze niet op 1??? --> TODO controleer de puluitgang CF2
-//	this-regWrite16(CF3DEN, 0x000A); // CF3DEN factor 10 is waarom kan deze niet op 1??? --> TODO controleer de puluitgang CF3
-//	//????? huh
-//	//this-regWrite16(CFMODE,0b0000000011011011);//Initialize CF1DEN, CF2DEN, and CF3DEN registers based in Equation 49.
-//
-//	// Initialize WTHR, VARTHR, VATHR, VLEVEL and VNOM registers based Equation 26, Equation 37, Equation 44, Equation 22, and Equation 42, respectively
-//	this-regWrite8(WTHR, 0x06);//Eq.26: WTHR = 27,059,678 x 1.024 x 10e6 x 3600 x 10^n / (Ufs x Ifs x 2^27). Met n=0, Ufs=460, Ifs=250 --> WTHR = 0x06 (default: 0x03)
-//	this-regWrite8(VARTHR, 0x06);//Eq.37: VARTHR = PMAX x Fs x 3600 x 10^n / (Ufs x Ifs x 2^27). Met n=0, Ufs=460, Ifs=250 --> VARTHR = 0x06 (default: 0x03)
-//	this-regWrite8(VATHR, 0x06);//Eq.44: VATHR = PMAX x Fs x 3600 x 10^n / (Ufs x Ifs x 2^27). Met n=0, Ufs=460, Ifs=250 --> VATHR = 0x06 (default: 0x03)
-//	this-regWrite24(VLEVEL, 0x7A1200); //Eq.22: VLEVEL = Ufs x 4 x10e6 / Un. Met Un=230, Ufs=460 --> VLEVEL = 0x7A1200 (signed register is this different to the unsigned registers???)
-//	this-regWrite24(VNOM, 0x1CBC96); //Eq.42: VNOM = 3766572 x U / Ufs. Met U=230, Ufs=460 --> VNOM = 1CBC96  //Similar to the register presented in Figure 57, the VNOM 24-bit signed register is accessed as a 32-bit register with the eight MSBs padded with 0s??????
-//
-//	// Enable the data memory RAM protection, by writing 0xAD to an internal 8-bit register located at Address 0xE7FE, followed by a write of 0x80 to an internal 8-bit register located at Address 0xE7E3.
-//	this-regWrite8(0xE7FE, 0xAD);
-//	this-regWrite8(0xE7E3, 0x80);
-//
-//	// Configure voltage measurement
-//
 	// Start the DSP by setting Run = 1
 	uint16_t reg = 0x0001;
 	this->regWrite16(RUN, reg);
