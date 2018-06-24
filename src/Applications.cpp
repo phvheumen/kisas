@@ -43,17 +43,17 @@ Application::~Application() {
 }
 
 void Application::setHttpHost(String host, String path, unsigned int port=80) {
-	this->httpRequest.ip = IPAddress(0,0,0,0);
-	this->httpRequest.hostname = host;
-	this->httpRequest.port = port;
-	this->httpRequest.path = path;
+//	this->httpRequest.ip = IPAddress(0,0,0,0);
+//	this->httpRequest.hostname = host;
+//	this->httpRequest.port = port;
+//	this->httpRequest.path = path;
 }
 
 void Application::setHttpHost(IPAddress ip, String path, unsigned int port=80) {
-	this->httpRequest.ip = ip;
-	this->httpRequest.hostname = "";
-	this->httpRequest.port = port;
-	this->httpRequest.path = path;
+//	this->httpRequest.ip = ip;
+//	this->httpRequest.hostname = "";
+//	this->httpRequest.port = port;
+//	this->httpRequest.path = path;
 }
 
 int Application::httpPostRequest(String body)

@@ -46,9 +46,6 @@ public:
 
 protected:
     HttpClient 		httpClient;
-	http_request_t 	httpRequest;
-	http_response_t httpResponse;
-	http_header_t	httpHeader[16];
 
     String systemID;		// Unique identifier for each Particle/KISAS sensor
 	String applicationID;	// Unique identifier for each application

@@ -11,17 +11,16 @@
 
 
 String hostname = "liandon-meetdata.nl";
-http_request_t request;
-http_response_t response;
+
 HttpClient http;
-char HTTPHeaderAuthValue[]="Basic MTo2M2Z4VjVkVTlCSWk1ZmV5RmRQWVZqUmFUUzJrUnA1RA==";
-http_header_t headers[] = {
-      { "Content-Type", "application/json" },
-      { "Accept" , "application/json" },
-    { "Accept" , "*/*"},
-    { "Authorization" , (const char *)&HTTPHeaderAuthValue},
-    { NULL, NULL } // NOTE: Always terminate headers will NULL
-};
+//char HTTPHeaderAuthValue[]="Basic MTo2M2Z4VjVkVTlCSWk1ZmV5RmRQWVZqUmFUUzJrUnA1RA==";
+//http_header_t headers[] = {
+//      { "Content-Type", "application/json" },
+//      { "Accept" , "application/json" },
+//    { "Accept" , "*/*"},
+//    { "Authorization" , (const char *)&HTTPHeaderAuthValue},
+//    { NULL, NULL } // NOTE: Always terminate headers will NULL
+//};
 /*
 
 //settings for voltage and freqency measurement
