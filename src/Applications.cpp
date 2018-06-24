@@ -7,10 +7,14 @@
 #include <HttpClient.h>
 #include <string.h>
 
+//
+// CLASS APPLICATION
+//
 Application::Application() {
 	this->systemID = String(0);
 	this->applicationID = String(0);
 	this->messageFormatID = String(0);
+	this->appManager = nullptr;
 
 	APP_MSG("Application> Warning: Constructor with no arguments called")
 	this->printApplicationInstance();
@@ -20,6 +24,7 @@ Application::Application(String systemID, String applicationID, String messageFo
 	this->systemID = systemID;
 	this->applicationID = applicationID;
 	this->messageFormatID = messageFormatID;
+	this->appManager = nullptr;
 
 	this->printApplicationInstance();
 }
@@ -28,6 +33,25 @@ Application::Application(unsigned int systemID, unsigned int applicationID, unsi
 	this->systemID = String(systemID);
 	this->applicationID = String(applicationID);
 	this->messageFormatID = String(messageFormatID);
+	this->appManager = nullptr;
+
+	this->printApplicationInstance();
+}
+
+Application::Application(unsigned int systemID, unsigned int applicationID, unsigned int messageFormatID,  ApplicationManager* AppManPtr) {
+	this->systemID = String(systemID);
+	this->applicationID = String(applicationID);
+	this->messageFormatID = String(messageFormatID);
+	this->appManager = AppManPtr;
+
+	this->printApplicationInstance();
+}
+
+Application::Application(String systemID, String applicationID, String messageFormatID, ApplicationManager* AppManPtr) {
+	this->systemID = String(systemID);
+	this->applicationID = String(applicationID);
+	this->messageFormatID = String(messageFormatID);
+	this->appManager = AppManPtr;
 
 	this->printApplicationInstance();
 }
@@ -42,65 +66,42 @@ Application::~Application() {
 
 }
 
-void Application::setHttpHost(String host, String path, unsigned int port=80) {
-//	this->httpRequest.ip = IPAddress(0,0,0,0);
-//	this->httpRequest.hostname = host;
-//	this->httpRequest.port = port;
-//	this->httpRequest.path = path;
-}
-
-void Application::setHttpHost(IPAddress ip, String path, unsigned int port=80) {
-//	this->httpRequest.ip = ip;
-//	this->httpRequest.hostname = "";
-//	this->httpRequest.port = port;
-//	this->httpRequest.path = path;
-}
-
-int Application::httpPostRequest(String body)
-{
-//	APP_MSG("Application> HTTP Post request")
 //
-//	this->httpHeader[0] = { "Content-Type", "application/json" };
-//	this->httpHeader[1] = { "Accept" , "application/json" };
-//	this->httpHeader[2] = { "Accept" , "*/*"};
-//	this->httpHeader[3] = { "Authorization" , "Basic MTo2M2Z4VjVkVTlCSWk1ZmV5RmRQWVZqUmFUUzJrUnA1RA=="};
-//	this->httpHeader[4] = { NULL, NULL }; // NOTE: Always terminate headers with NULL
+// CLASS APPLICATIONMANAGER
 //
-//	/* Check if host, port, headers are set properly */
-//	if ( this->httpRequest.hostname == "" && this->httpRequest.ip == (uint32_t)0 ) {
-//		APP_MSG("httpPostRequest> Error: host not set");
-//		return -1;
-//	}
-//
-//	/* Check for empty header */
-//	if( this->httpHeader[0].header == NULL ) {
-//		APP_MSG("httpPostRequest> Warning: header empty");
-//	}
-//
-//	/* Fill body */
-//	this->httpRequest.body = "Hello, world!";
-//
-//	/* Send request and wait for response */
-//	APP_MSG_FORMATTED("httpPostRequest> Request host: %s", this->httpRequest.hostname.c_str());
-//	APP_MSG_FORMATTED("httpPostRequest> Request port: %d", this->httpRequest.port);
-//	APP_MSG_FORMATTED("httpPostRequest> Request path: %s", this->httpRequest.path.c_str());
-//	APP_MSG("httpPostRequest> Send request");
-//
-//	this->httpClient.post(this->httpRequest, this->httpResponse, this->httpHeader);
-//
-//	APP_MSG_FORMATTED("httpPostRequest> Response status: %d", this->httpResponse.status);
-//	APP_MSG_FORMATTED("httpPostRequest> Response body: %s", this->httpResponse.body.c_str());
-//
-//	return this->httpResponse.status;
-}
-
 ApplicationManager::ApplicationManager() :
-		TimeAverage(this)
+		TimeAverage(this),
+		PerCall(this)
 {
 	APP_MSG("ApplicationManger> Started");
 }
 
 ApplicationManager::~ApplicationManager() {
+
+}
+
+//
+// CLASS PERIODICCALL
+//
+PeriodicCall::PeriodicCall(ApplicationManager * _Manager):
+	Application("Particle", "PeriodicCall", String(0), _Manager),
+	periodicCallTimer(5000, &PeriodicCall::run, *this)
+{
+
+}
+
+PeriodicCall::~PeriodicCall() {
+
+}
+
+void PeriodicCall::init(void) {
+	this->periodicCallTimer.start();
+}
+void PeriodicCall::run(void) {
+	APP_MSG("PeriodicCall::run()");
+}
+
+void PeriodicCall::httpRequestCallback(HTTP_Request& r) {
 
 }
 

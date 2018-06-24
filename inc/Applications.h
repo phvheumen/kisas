@@ -1,5 +1,6 @@
 #include <application.h>
 #include <HttpClient.h>
+#include "http_request.h"
 #include "math.h"
 
 /* Defines */
@@ -33,25 +34,41 @@ class ApplicationManager; // Forward declare
 class Application
 {
 public:
-	Application();
+	Application(unsigned int systemID, unsigned int applicationID, unsigned int messageFormatID,  ApplicationManager* AppManPtr);
+    Application(String systemID, String applicationID, String messageFormatID, ApplicationManager* AppManPtr);
+
+    // The following constructors will be removed in the near future
+    Application();
     Application(String systemID, String applicationID, String messageFormatID);
     Application(unsigned int systemID, unsigned int applicationID, unsigned int messageFormatID);
+
+
     ~Application();
 
     void printApplicationInstance(void);
 
-    int httpPostRequest(String body);
-    void setHttpHost(String host, String path, unsigned int port);
-    void setHttpHost(IPAddress ip, String path, unsigned int port);
-
 protected:
-    HttpClient 		httpClient;
-
     String systemID;		// Unique identifier for each Particle/KISAS sensor
 	String applicationID;	// Unique identifier for each application
 	String messageFormatID; // Identify the message format. In this way the overhead of sending field names can be avoided
+
+	ApplicationManager* appManager; // Pointer to application manager, useful for inter-application communication
 private:
 
+};
+
+/* ---- Dummy Periodic Application ----*/
+class PeriodicCall: public Application
+{
+public:
+	PeriodicCall(ApplicationManager * _Manager);
+	~PeriodicCall();
+
+	void init(void);
+	void run(void);
+	void httpRequestCallback(HTTP_Request& r);
+private:
+	Timer periodicCallTimer;
 };
 
 /* ---- Time-averaging Application ---- */
@@ -128,6 +145,7 @@ public:
 	~ApplicationManager();
 
 	TmAverage TimeAverage;
+	PeriodicCall PerCall;
 	//SmplScope SimpleScope;
 
 	void parseSetting(float * SettingsArr, int Length);
