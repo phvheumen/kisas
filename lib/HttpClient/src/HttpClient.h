@@ -5,6 +5,7 @@
 #include "spark_wiring_string.h"
 #include "spark_wiring_tcpclient.h"
 #include "spark_wiring_usbserial.h"
+#include <functional>
 
 /**
  * Defines for the HTTP methods.
@@ -37,10 +38,9 @@ typedef struct
   String hostname;
   IPAddress ip;
   String path;
-  // TODO: Look at setting the port by default.
-  //int port = 80;
   int port;
   String body;
+  String method;
 } http_request_t;
 
 /**
@@ -50,9 +50,18 @@ typedef struct
  */
 typedef struct
 {
-  int status;
+  String status;
   String body;
 } http_response_t;
+
+typedef enum http_request_status {
+	HTTP_STATUS_OK,
+	HTTP_STATUS_CONNECTION_TIMEOUT,
+	HTTP_STATUS_RESPONSE_TIMEOUT,
+	HTTP_STATUS_RESPONSE_ERROR
+} http_request_status_t;
+
+using http_callback_func = void(http_request_t *, http_response_t *, http_request_status_t);
 
 class HttpClient {
 public:
@@ -60,70 +69,64 @@ public:
     * Public references to variables.
     */
     TCPClient client;
-    char buffer[1024];
 
     /**
     * Constructor.
     */
-    HttpClient(void);
+    HttpClient(uint16_t timeout=0);
 
-    /**
-    * HTTP request methods.
-    * Can't use 'delete' as name since it's a C++ keyword.
-    */
-    void get(http_request_t &aRequest, http_response_t &aResponse)
-    {
-        request(aRequest, aResponse, (http_header_t*)NULL, HTTP_METHOD_GET);
-    }
+    http_request_t testRequest;
+    http_response_t testResponse;
 
-    void post(http_request_t &aRequest, http_response_t &aResponse)
-    {
-        request(aRequest, aResponse, (http_header_t*)NULL, HTTP_METHOD_POST);
-    }
+    /*
+     * State machine methods and members
+     */
+    using stateFunction = void(HttpClient *);
 
-    void put(http_request_t &aRequest, http_response_t &aResponse)
-    {
-        request(aRequest, aResponse, (http_header_t*)NULL, HTTP_METHOD_PUT);
-    }
+    struct state_triplet {
+    	stateFunction * state_prev;
+    	stateFunction * state_curr;
+    	stateFunction * state_next;
+    } stateMachine;
 
-    void del(http_request_t &aRequest, http_response_t &aResponse)
-    {
-        request(aRequest, aResponse, (http_header_t*)NULL, HTTP_METHOD_DELETE);
-    }
+    struct state_machine_variables {
+    	http_request_t * currentRequest;
+    } stateMachineVariables;
 
-    void get(http_request_t &aRequest, http_response_t &aResponse, http_header_t headers[])
-    {
-        request(aRequest, aResponse, headers, HTTP_METHOD_GET);
-    }
+    void run(void);
+    static void stateMachineEntry(HttpClient * obj);
 
-    void post(http_request_t &aRequest, http_response_t &aResponse, http_header_t headers[])
-    {
-        request(aRequest, aResponse, headers, HTTP_METHOD_POST);
-    }
+    static void stateIdle(HttpClient * obj);
+    static void stateConnect(HttpClient * obj);
+    static void stateTransmit(HttpClient * obj);
+    static void stateWaitResponse(HttpClient * obj);
+    static void stateTimeout(HttpClient * obj);
+    static void stateDone(HttpClient * obj);
+    static void stateError(HttpClient * obj);
 
-    void put(http_request_t &aRequest, http_response_t &aResponse, http_header_t headers[])
-    {
-        request(aRequest, aResponse, headers, HTTP_METHOD_PUT);
-    }
+    /*
+     * Request queue methods
+     */
+    bool pushRequest(http_request_t &pRequest);
+    bool popRequest(http_request_t &pRequest);
 
-    void del(http_request_t &aRequest, http_response_t &aResponse, http_header_t headers[])
-    {
-        request(aRequest, aResponse, headers, HTTP_METHOD_DELETE);
-    }
-	
-    void patch(http_request_t &aRequest, http_response_t &aResponse, http_header_t headers[])
-    {
-        request(aRequest, aResponse, headers, HTTP_METHOD_PATCH);
-    }
+    /*
+     * Send request
+     */
+    bool sendRequest(http_callback_func * callback);
 
 private:
-    /**
-    * Underlying HTTP methods.
-    */
-    void request(http_request_t &aRequest, http_response_t &aResponse, http_header_t headers[], const char* aHttpMethod);
-    void sendHeader(const char* aHeaderName, const char* aHeaderValue);
-    void sendHeader(const char* aHeaderName, const int aHeaderValue);
-    void sendHeader(const char* aHeaderName);
+    /*
+     * Private variables
+     */
+    String httpRequestString;
+    String httpResponseString;
+
+    http_request_t requestQueue[8];
+    http_response_t responseQueue[8];
+
+    uint16_t responseTimeoutMs;
+    uint8_t responseBuffer[1024];
 };
 
 #endif /* __HTTP_CLIENT_H_ */

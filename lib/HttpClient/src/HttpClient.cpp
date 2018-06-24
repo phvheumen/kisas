@@ -1,271 +1,299 @@
 #include "HttpClient.h"
+#include "Applications.h"
+#include <application.h>
+#include <string>
 
 static const uint16_t TIMEOUT = 5000; // Allow maximum 5s between data packets.
 
 /**
 * Constructor.
 */
-HttpClient::HttpClient()
+HttpClient::HttpClient(uint16_t timeout)
 {
-
+	this->responseTimeoutMs = timeout;
 }
 
 /**
-* Method to send a header, should only be called from within the class.
-*/
-void HttpClient::sendHeader(const char* aHeaderName, const char* aHeaderValue)
-{
-    client.print(aHeaderName);
-    client.print(": ");
-    client.println(aHeaderValue);
+	run() always tries to jump to next state and shift states in state triplet accordingly.
+	When state_next is nullptr, run stays in current state.
+	The state triplet is used inside states to determine state entry and state exit
+ */
+void HttpClient::run(void) {
+	// If state_curr is null pointer start with stateMachineEntry
+	if( this->stateMachine.state_curr == nullptr ) {
+		this->stateMachine.state_curr = stateMachineEntry;
+	}
 
-    #ifdef LOGGING
-    Serial.print(aHeaderName);
-    Serial.print(": ");
-    Serial.println(aHeaderValue);
-    #endif
-}
+	// If state_next is null pointer stay in current state
+	if (this->stateMachine.state_next != nullptr) {
+		this->stateMachine.state_curr = this->stateMachine.state_next;
+	}
 
-void HttpClient::sendHeader(const char* aHeaderName, const int aHeaderValue)
-{
-    client.print(aHeaderName);
-    client.print(": ");
-    client.println(aHeaderValue);
+	// Execute state function once
+	stateMachine.state_curr(this); // Execute current state
 
-    #ifdef LOGGING
-    Serial.print(aHeaderName);
-    Serial.print(": ");
-    Serial.println(aHeaderValue);
-    #endif
-}
-
-void HttpClient::sendHeader(const char* aHeaderName)
-{
-    client.println(aHeaderName);
-
-    #ifdef LOGGING
-    Serial.println(aHeaderName);
-    #endif
+	// Previous state is same as current state now
+	this->stateMachine.state_prev = this->stateMachine.state_curr;
 }
 
 /**
-* Method to send an HTTP Request. Allocate variables in your application code
-* in the aResponse struct and set the headers and the options in the aRequest
-* struct.
-*/
-void HttpClient::request(http_request_t &aRequest, http_response_t &aResponse, http_header_t headers[], const char* aHttpMethod)
-{
-    // If a proper response code isn't received it will be set to -1.
-    aResponse.status = -1;
+	stateMachineEntry decides where to start the state machine.
+	Possibly some global variables for the state machine can be initialised here.
+	@param HttpClient instance pointer.
+ */
+void HttpClient::stateMachineEntry(HttpClient * obj) {
+	obj->stateMachine.state_next = stateIdle;
+}
 
-    // NOTE: The default port tertiary statement is unpredictable if the request structure is not initialised
-    // http_request_t request = {0} or memset(&request, 0, sizeof(http_request_t)) should be used
-    // to ensure all fields are zero
-    bool connected = false;
-    if(aRequest.hostname!=NULL) {
-        connected = client.connect(aRequest.hostname.c_str(), (aRequest.port) ? aRequest.port : 80 );
-    }   else {
-        connected = client.connect(aRequest.ip, aRequest.port);
-    }
+void HttpClient::stateIdle(HttpClient * obj) {
+	/* State entry */
+	if ( obj->stateMachine.state_curr != obj->stateMachine.state_prev ) {
+		APP_MSG("HttpClient::stateIdle> Entry");
 
-    #ifdef LOGGING
-    if (connected) {
-        if(aRequest.hostname!=NULL) {
-            Serial.print("HttpClient>\tConnecting to: ");
-            Serial.print(aRequest.hostname);
-        } else {
-            Serial.print("HttpClient>\tConnecting to IP: ");
-            Serial.print(aRequest.ip);
-        }
-        Serial.print(":");
-        Serial.println(aRequest.port);
-    } else {
-        Serial.println("HttpClient>\tConnection failed.");
-    }
-    #endif
+	}
+	/* State entry end */
 
-    if (!connected) {
-        client.stop();
-        // If TCP Client can't connect to host, exit here.
-        return;
-    }
+	/* State during */
+	if( ( !( obj->testRequest.ip == (uint32_t) 0 ) ||  obj->testRequest.hostname != "" ) && obj->testRequest.port != 0 ){
+		// If hostname or ip available start request
+		obj->stateMachineVariables.currentRequest = &obj->testRequest;
+		obj->stateMachine.state_next = stateConnect;
+	}
+	/* State during end*/
 
-    //
-    // Send HTTP Headers
-    //
+	/* State exit */
+	if ( obj->stateMachine.state_curr != obj->stateMachine.state_next ) {
+		APP_MSG("HttpClient::stateIdle> Exit");
+	}
+	/* State exit end */
+}
 
-    // Send initial headers (only HTTP 1.0 is supported for now).
-    client.print(aHttpMethod);
-    client.print(" ");
-    client.print(aRequest.path);
-    client.print(" HTTP/1.0\r\n");
+void HttpClient::stateConnect(HttpClient * obj) {
+	/* State entry */
+	if ( obj->stateMachine.state_curr != obj->stateMachine.state_prev ) {
+		APP_MSG("HttpClient::stateConnect> Entry");
+	}
+	/* State entry end */
 
-    #ifdef LOGGING
-    Serial.println("HttpClient>\tStart of HTTP Request.");
-    Serial.print(aHttpMethod);
-    Serial.print(" ");
-    Serial.print(aRequest.path);
-    Serial.print(" HTTP/1.0\r\n");
-    #endif
+	/* State during */
+	do {
+		http_request_t * req = obj->stateMachineVariables.currentRequest;
+		if ( req->ip == (uint32_t) 0 ) {
+			APP_MSG_FORMATTED("HttpClient::stateConnect> Resolving hostname: %s", req->hostname.c_str());
+			// First start resolving hostname
+			req->ip = Cellular.resolve(req->hostname.c_str());
+			if(req->ip) {
+				// Hostname resolved!
+				APP_MSG("HttpClient::stateConnect> Hostname resolved");
+			} else {
+				// Hostname could not be resolved. Go to error state
+				APP_MSG("HttpClient::stateConnect> Hostname not resolved");
+				obj->stateMachine.state_next = stateError;
+				break;
+			}
+		} else {
+			APP_MSG_FORMATTED("HttpClient::stateConnect> Connecting to: %s", req->ip.toString().c_str());
+			if( obj->client.connect(req->ip, req->port) ) {
+				// Connected, now its time to send HTTP request
+				APP_MSG("HttpClient::stateConnect> connected");
+				obj->stateMachine.state_next = stateTransmit;
+			} else {
+				// Connection failed. Go to error state
+				APP_MSG("HttpClient::stateConnect> Connection failed");
+				obj->stateMachine.state_next = stateError;
+				break;
+			}
+		}
+	}
+	while(0);
+	/* State during end*/
 
-    // Send General and Request Headers.
-    sendHeader("Connection", "close"); // Not supporting keep-alive for now.
-    if(aRequest.hostname!=NULL) {
-        sendHeader("HOST", aRequest.hostname.c_str());
-    }
+	/* State exit */
+	if ( obj->stateMachine.state_curr != obj->stateMachine.state_next ) {
+		APP_MSG("HttpClient::stateConnect> Exit");
+	}
+	/* State exit end */
+}
 
-    //Send Entity Headers
-    // TODO: Check the standard, currently sending Content-Length : 0 for empty
-    // POST requests, and no content-length for other types.
-    if (aRequest.body != NULL) {
-        sendHeader("Content-Length", (aRequest.body).length());
-    } else if (strcmp(aHttpMethod, HTTP_METHOD_POST) == 0) { //Check to see if its a Post method.
-        sendHeader("Content-Length", 0);
-    }
+void HttpClient::stateTransmit(HttpClient * obj) {
+	/* State entry */
+	if ( obj->stateMachine.state_curr != obj->stateMachine.state_prev ) {
+		APP_MSG("HttpClient::stateTransmit> Entry");
 
-    if (headers != NULL)
-    {
-        int i = 0;
-        while (headers[i].header != NULL)
-        {
-            if (headers[i].value != NULL) {
-                sendHeader(headers[i].header, headers[i].value);
-            } else {
-                sendHeader(headers[i].header);
-            }
-            i++;
-        }
-    }
+		obj->httpRequestString = "";
+		http_request_t * req = obj->stateMachineVariables.currentRequest;
 
-    // Empty line to finish headers
-    client.println();
-    client.flush();
+		obj->httpRequestString += req->method + " " + req->path + " HTTP/1.0\r\n";	// Send initial headers (only HTTP 1.0 is supported for now).
+		obj->httpRequestString += "Connection: close\r\n"; 						// Not supporting keep-alive for now.
+		if(req->hostname!=NULL) {
+			obj->httpRequestString += "HOST: " + req->hostname + "\r\n";
+		}
+		if (req->body != NULL) {
+			obj->httpRequestString += "Content-Length: " + String( (req->body).length() ) + "\r\n";
+		} else if (req->method == HTTP_METHOD_POST) { //Check to see if its a Post method.
+			obj->httpRequestString += "Content-Length: 0\r\n";
+		}
 
-    //
-    // Send HTTP Request Body
-    //
+// TODO: Add additional headers
+//	    if (headers != NULL)
+//	    {
+//	        int i = 0;
+//	        while (headers[i].header != NULL)
+//	        {
+//	            if (headers[i].value != NULL) {
+//	                this->httpRequestString += String(headers[i].header) + ": " + String(headers[i].value) + "\r\n";
+//	            } else {
+//	                this->httpRequestString += String(headers[i].header) + "\r\n";
+//	            }
+//	            i++;
+//	        }
+//	    }
 
-    if (aRequest.body != NULL) {
-        client.println(aRequest.body);
+	    // Empty line to finish headers
+		obj->httpRequestString += "\r\n";
+		obj->httpRequestString += req->body;
 
-        #ifdef LOGGING
-        Serial.println(aRequest.body);
-        #endif
-    }
+		APP_MSG_FORMATTED("HttpClient::stateTransmit> HTTP request: \r\n%s", obj->httpRequestString.c_str());
+	}
+	/* State entry end */
 
-    #ifdef LOGGING
-    Serial.println("HttpClient>\tEnd of HTTP Request.");
-    #endif
+	/* State during */
+	do {
+		uint16_t httpLength = obj->httpRequestString.length();
 
-    // clear response buffer
-    memset(&buffer[0], 0, sizeof(buffer));
+		if ( obj->client.write((uint8_t *) obj->httpRequestString.c_str(), httpLength) != httpLength ) {
+			obj->stateMachine.state_next = stateError;
+			break;
+		} else {
+			obj->httpRequestString = "";
+			obj->stateMachine.state_next = stateWaitResponse;
+		}
+	} while (0);
+	/* State during end*/
 
+	/* State exit */
+	if ( obj->stateMachine.state_curr != obj->stateMachine.state_next ) {
+		APP_MSG("HttpClient::stateTransmit> Exit");
+	}
+	/* State exit end */
+}
 
-    //
-    // Receive HTTP Response
-    //
-    // The first value of client.available() might not represent the
-    // whole response, so after the first chunk of data is received instead
-    // of terminating the connection there is a delay and another attempt
-    // to read data.
-    // The loop exits when the connection is closed, or if there is a
-    // timeout or an error.
+void HttpClient::stateWaitResponse(HttpClient * obj) {
+	static unsigned long tickMs;
+	static uint16_t bytesReceived;
+	/* State entry */
+	if ( obj->stateMachine.state_curr != obj->stateMachine.state_prev ) {
+		APP_MSG("HttpClient::stateWaitResponse> Entry");
 
-    unsigned int bufferPosition = 0;
-    unsigned long lastRead = millis();
-    unsigned long firstRead = millis();
-    bool error = false;
-    bool timeout = false;
+		tickMs = millis();
+		bytesReceived = 0;
+	}
+	/* State entry end */
 
-    do {
-        #ifdef LOGGING
-        int bytes = client.available();
-        if(bytes) {
-            Serial.print("\r\nHttpClient>\tReceiving TCP transaction of ");
-            Serial.print(bytes);
-            Serial.println(" bytes.");
-        }
-        #endif
+	/* State during */
+	int bytesAvailable = obj->client.available();
+	if ( bytesAvailable > 0 ) {
+		obj->client.read(&obj->responseBuffer[bytesReceived], bytesAvailable);
+		bytesReceived += bytesAvailable;
+	} else if ( bytesAvailable < 0 ){
+		// Error
+		obj->stateMachine.state_next = stateError;
+	} else if ( (millis() > tickMs + (unsigned long) obj->responseTimeoutMs) && obj->responseTimeoutMs != 0 ) {
+		// Time out condition
+		obj->stateMachine.state_next = stateTimeout;
+	} else if ( !obj->client.connected() ) {
+		// Connection closed. An indicator for end of response
+		obj->responseBuffer[bytesReceived] = '\0';
+		obj->httpResponseString = String((char *) obj->responseBuffer);
+		APP_MSG_FORMATTED("HttpClient::stateWaitResponse> Response: \r\n%s", obj->httpResponseString.c_str());
 
-        while (client.available()) {
-            char c = client.read();
-            #ifdef LOGGING
-            Serial.print(c);
-            #endif
-            lastRead = millis();
+		// Get status code in a not so elegant way
+		String statusCode = obj->httpResponseString.substring(9,12);
+		obj->testResponse.status = statusCode;
+		APP_MSG_FORMATTED("HttpClient::stateWaitResponse> Response code: %s", obj->testResponse.status.c_str());
 
-            if (c == -1) {
-                error = true;
+		// Get body
+		int bodyPos = obj->httpResponseString.indexOf("\r\n\r\n");
+		if (bodyPos == -1) {
+			APP_MSG("HttpClient::stateWaitResponse> No response body");
+		} else {
+			obj->testResponse.body = "";
+			obj->testResponse.body += obj->httpResponseString.substring(bodyPos+4);
+		}
 
-                #ifdef LOGGING
-                Serial.println("HttpClient>\tError: No data available.");
-                #endif
+		if (obj->testResponse.status == String("200")) {
+			obj->stateMachine.state_next = stateDone;
+		} else {
+			obj->stateMachine.state_next = stateError;
+		}
 
-                break;
-            }
+	}
 
-            // Check that received character fits in buffer before storing.
-            if (bufferPosition < sizeof(buffer)-1) {
-                buffer[bufferPosition] = c;
-            } else if ((bufferPosition == sizeof(buffer)-1)) {
-                buffer[bufferPosition] = '\0'; // Null-terminate buffer
-                client.stop();
-                error = true;
+	/* State during end*/
 
-                #ifdef LOGGING
-                Serial.println("HttpClient>\tError: Response body larger than buffer.");
-                #endif
-            }
-            bufferPosition++;
-        }
-        buffer[bufferPosition] = '\0'; // Null-terminate buffer
+	/* State exit */
+	if ( obj->stateMachine.state_curr != obj->stateMachine.state_next ) {
 
-        #ifdef LOGGING
-        if (bytes) {
-            Serial.print("\r\nHttpClient>\tEnd of TCP transaction.");
-        }
-        #endif
+		APP_MSG("HttpClient::stateWaitResponse> Exit");
+	}
+	/* State exit end */
+}
 
-        // Check that there hasn't been more than 5s since last read.
-        timeout = millis() - lastRead > TIMEOUT;
+void HttpClient::stateTimeout(HttpClient * obj) {
+	/* State entry */
+	if ( obj->stateMachine.state_curr != obj->stateMachine.state_prev ) {
+		APP_MSG("HttpClient::stateTimeout> Entry");
+	}
+	/* State entry end */
 
-        // Unless there has been an error or timeout wait 200ms to allow server
-        // to respond or close connection.
-        if (!error && !timeout) {
-            delay(200);
-        }
-    } while (client.connected() && !timeout && !error);
+	/* State during */
 
-    #ifdef LOGGING
-    if (timeout) {
-        Serial.println("\r\nHttpClient>\tError: Timeout while reading response.");
-    }
-    Serial.print("\r\nHttpClient>\tEnd of HTTP Response (");
-    Serial.print(millis() - firstRead);
-    Serial.println("ms).");
-    #endif
-    client.stop();
+	/* State during end*/
 
-    String raw_response(buffer);
+	/* State exit */
+	if ( obj->stateMachine.state_curr != obj->stateMachine.state_next ) {
+		APP_MSG("HttpClient::stateTimeout> Exit");
+	}
+	/* State exit end */
+}
 
-    // Not super elegant way of finding the status code, but it works.
-    String statusCode = raw_response.substring(9,12);
+void HttpClient::stateDone(HttpClient * obj) {
+	/* State entry */
+	if ( obj->stateMachine.state_curr != obj->stateMachine.state_prev ) {
+		APP_MSG("HttpClient::stateDone> Entry");
+	}
+	/* State entry end */
 
-    #ifdef LOGGING
-    Serial.print("HttpClient>\tStatus Code: ");
-    Serial.println(statusCode);
-    #endif
+	/* State during */
 
-    int bodyPos = raw_response.indexOf("\r\n\r\n");
-    if (bodyPos == -1) {
-        #ifdef LOGGING
-        Serial.println("HttpClient>\tError: Can't find HTTP response body.");
-        #endif
+	/* State during end*/
 
-        return;
-    }
-    // Return the entire message body from bodyPos+4 till end.
-    aResponse.body = "";
-    aResponse.body += raw_response.substring(bodyPos+4);
-    aResponse.status = atoi(statusCode.c_str());
+	/* State exit */
+	if ( obj->stateMachine.state_curr != obj->stateMachine.state_next ) {
+		APP_MSG("HttpClient::stateDone> Exit");
+	}
+	/* State exit end */
+}
+
+void HttpClient::stateError(HttpClient * obj) {
+	/* State entry */
+	if ( obj->stateMachine.state_curr != obj->stateMachine.state_prev ) {
+		APP_MSG("HttpClient::stateError> Entry");
+	}
+	/* State entry end */
+
+	/* State during */
+
+	/* State during end*/
+
+	/* State exit */
+	if ( obj->stateMachine.state_curr != obj->stateMachine.state_next ) {
+		APP_MSG("HttpClient::stateError> Exit");
+	}
+	/* State exit end */
+}
+
+bool HttpClient::sendRequest(http_callback_func * callback) {
+
+	return true;
 }
