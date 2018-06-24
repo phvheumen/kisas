@@ -58,40 +58,40 @@ void Application::setHttpHost(IPAddress ip, String path, unsigned int port=80) {
 
 int Application::httpPostRequest(String body)
 {
-	APP_MSG("Application> HTTP Post request")
-
-	this->httpHeader[0] = { "Content-Type", "application/json" };
-	this->httpHeader[1] = { "Accept" , "application/json" };
-	this->httpHeader[2] = { "Accept" , "*/*"};
-	this->httpHeader[3] = { "Authorization" , "Basic MTo2M2Z4VjVkVTlCSWk1ZmV5RmRQWVZqUmFUUzJrUnA1RA=="};
-	this->httpHeader[4] = { NULL, NULL }; // NOTE: Always terminate headers with NULL
-
-	/* Check if host, port, headers are set properly */
-	if ( this->httpRequest.hostname == "" && this->httpRequest.ip == (uint32_t)0 ) {
-		APP_MSG("httpPostRequest> Error: host not set");
-		return -1;
-	}
-
-	/* Check for empty header */
-	if( this->httpHeader[0].header == NULL ) {
-		APP_MSG("httpPostRequest> Warning: header empty");
-	}
-
-	/* Fill body */
-	this->httpRequest.body = "Hello, world!";
-
-	/* Send request and wait for response */
-	APP_MSG_FORMATTED("httpPostRequest> Request host: %s", this->httpRequest.hostname.c_str());
-	APP_MSG_FORMATTED("httpPostRequest> Request port: %d", this->httpRequest.port);
-	APP_MSG_FORMATTED("httpPostRequest> Request path: %s", this->httpRequest.path.c_str());
-	APP_MSG("httpPostRequest> Send request");
-
-	this->httpClient.post(this->httpRequest, this->httpResponse, this->httpHeader);
-
-	APP_MSG_FORMATTED("httpPostRequest> Response status: %d", this->httpResponse.status);
-	APP_MSG_FORMATTED("httpPostRequest> Response body: %s", this->httpResponse.body.c_str());
-
-	return this->httpResponse.status;
+//	APP_MSG("Application> HTTP Post request")
+//
+//	this->httpHeader[0] = { "Content-Type", "application/json" };
+//	this->httpHeader[1] = { "Accept" , "application/json" };
+//	this->httpHeader[2] = { "Accept" , "*/*"};
+//	this->httpHeader[3] = { "Authorization" , "Basic MTo2M2Z4VjVkVTlCSWk1ZmV5RmRQWVZqUmFUUzJrUnA1RA=="};
+//	this->httpHeader[4] = { NULL, NULL }; // NOTE: Always terminate headers with NULL
+//
+//	/* Check if host, port, headers are set properly */
+//	if ( this->httpRequest.hostname == "" && this->httpRequest.ip == (uint32_t)0 ) {
+//		APP_MSG("httpPostRequest> Error: host not set");
+//		return -1;
+//	}
+//
+//	/* Check for empty header */
+//	if( this->httpHeader[0].header == NULL ) {
+//		APP_MSG("httpPostRequest> Warning: header empty");
+//	}
+//
+//	/* Fill body */
+//	this->httpRequest.body = "Hello, world!";
+//
+//	/* Send request and wait for response */
+//	APP_MSG_FORMATTED("httpPostRequest> Request host: %s", this->httpRequest.hostname.c_str());
+//	APP_MSG_FORMATTED("httpPostRequest> Request port: %d", this->httpRequest.port);
+//	APP_MSG_FORMATTED("httpPostRequest> Request path: %s", this->httpRequest.path.c_str());
+//	APP_MSG("httpPostRequest> Send request");
+//
+//	this->httpClient.post(this->httpRequest, this->httpResponse, this->httpHeader);
+//
+//	APP_MSG_FORMATTED("httpPostRequest> Response status: %d", this->httpResponse.status);
+//	APP_MSG_FORMATTED("httpPostRequest> Response body: %s", this->httpResponse.body.c_str());
+//
+//	return this->httpResponse.status;
 }
 
 ApplicationManager::ApplicationManager() :
@@ -140,106 +140,107 @@ void TmAverage::reset()
 
 void TmAverage::SendMessage(void)
 {
-    //extern http_request_t request;
-    Serial.print("TmAverage.SendMessage>");
-    //Serial.println(request.path);
-    //Serial.print(millis(),DEC);
-    //Serial.print(", ");
-
-    //prepare messagestructure
-    //{"Src":1234,"Ptp":2,"Pid":10,"Fmt":0,"DTm":23,"MV":[{"Adr":60415,"Val":4.12345},{"Adr":60398,"Val":3.12245}]}
-    int Source=1;
-	String MessageHeader="{\"Src\":"+String(Source)+",\"Ptp\":2,\"Pid\":10,\"Fmt\":0,\"DTm\":"+String(Time.now())+",\"MV\":[";
-	String MessageBodyVars="";
-	String MessageBody="";
-	unsigned int i=0;
-	for(;i<(sizeof(VarList)/sizeof(VarList[0]));i++)
-    {
-        //NumSamplesList[i]=0;
-        //AverageList[i]=0;
-        if (VarList[i]==0){
-            break;}
-        //Serial.print(i,DEC); Serial.print(" ");Serial.println(VarList[i],HEX);
-        //Serial.println(MessageBodyVars);
-        if (i !=0){
-            MessageBodyVars+=",";}
-            //Serial.println(MessageBodyVars);
-        //MessageBodyVars+=(unsigned char)0x82;
-        MessageBodyVars+="{\"Adr\":";//(unsigned char)0xCD; //int16 itentifier
-        //Serial.println(MessageBodyVars);
-        MessageBodyVars+=String(VarList[i]);
-        MessageBodyVars+=",\"Val\":";
-
-        //---------scale with a scaling list-------------------
-        float scaled=AverageList[i];
-        if (VarList[i]==0x43C3)
-        {
-             scaled = 2*((AverageList[i])/100000) *9.38660911282921877506715;
-             Serial.println(scaled,5);
-
-
-        }
-        if (VarList[i]==0xE906)
-        {
-             scaled = (256000.0/AverageList[i]);
-             Serial.println(scaled,5);
-             Serial.println(AverageList[i],5);
-             Serial.println(ScalingList[i],5);
-             Serial.println(InNummeratorList[i],5);
-        }
-
-        if(InNummeratorList[i])
-        {
-            scaled = AverageList[i]*ScalingList[i];
-        }
-        else
-        {
-            scaled = ScalingList[i]/AverageList[i];
-        }
-        Serial.println(scaled,5);
-
-         //---------end of scale with a scaling list-------------------
-
-
-        MessageBodyVars+=String(scaled);
-        MessageBodyVars+="}";
-
-        MessageBody+=MessageBodyVars;
-        MessageBodyVars="";
-        //MessageBodyValues+=(unsigned char)0xCA; //float32 itentifier
-        //unsigned char MeasuredValue[]={0,0,0,0};
-        //memcpy(MeasuredValue, (unsigned char*) (&AverageList[i]), 4);
-        //MessageBodyValues+=MeasuredValue[3];
-        //MessageBodyValues+=MeasuredValue[2];
-        //MessageBodyValues+=MeasuredValue[1];
-        //MessageBodyValues+=MeasuredValue[0];
-    }
-    Serial.print(MessageHeader);Serial.print(MessageBody);Serial.println("]}");
-    String total = MessageHeader+MessageBody+"]}";
-    Serial.println(total);
-    delay(100);
-    uint32_t freemem = System.freeMemory();
-Serial.print("free memory: ");
-Serial.println(freemem);
-
-//updateTimer.stopFromISR();
-    //this->httpPostRequest(total);
-    PostBuffer = total;
-//updateTimer.startFromISR();
-    //PostHttpp(MessageHeader+MessageBody+"]}","/Kisas/Post.php");
-
-    NumSamplesList[0]=0;
-    NumSamplesList[1]=0;
-    NumSamplesList[2]=0;
-
-    for(unsigned int i=0;i<sizeof(VarList);i++)
-    {
-        if (VarList[i]==0)
-        {
-            break;
-        }
-        NumSamplesList[i]=0;
-    }
+	APP_MSG("TmAverage> Send Message");
+//    //extern http_request_t request;
+//    Serial.print("TmAverage.SendMessage>");
+//    //Serial.println(request.path);
+//    //Serial.print(millis(),DEC);
+//    //Serial.print(", ");
+//
+//    //prepare messagestructure
+//    //{"Src":1234,"Ptp":2,"Pid":10,"Fmt":0,"DTm":23,"MV":[{"Adr":60415,"Val":4.12345},{"Adr":60398,"Val":3.12245}]}
+//    int Source=1;
+//	String MessageHeader="{\"Src\":"+String(Source)+",\"Ptp\":2,\"Pid\":10,\"Fmt\":0,\"DTm\":"+String(Time.now())+",\"MV\":[";
+//	String MessageBodyVars="";
+//	String MessageBody="";
+//	unsigned int i=0;
+//	for(;i<(sizeof(VarList)/sizeof(VarList[0]));i++)
+//    {
+//        //NumSamplesList[i]=0;
+//        //AverageList[i]=0;
+//        if (VarList[i]==0){
+//            break;}
+//        //Serial.print(i,DEC); Serial.print(" ");Serial.println(VarList[i],HEX);
+//        //Serial.println(MessageBodyVars);
+//        if (i !=0){
+//            MessageBodyVars+=",";}
+//            //Serial.println(MessageBodyVars);
+//        //MessageBodyVars+=(unsigned char)0x82;
+//        MessageBodyVars+="{\"Adr\":";//(unsigned char)0xCD; //int16 itentifier
+//        //Serial.println(MessageBodyVars);
+//        MessageBodyVars+=String(VarList[i]);
+//        MessageBodyVars+=",\"Val\":";
+//
+//        //---------scale with a scaling list-------------------
+//        float scaled=AverageList[i];
+//        if (VarList[i]==0x43C3)
+//        {
+//             scaled = 2*((AverageList[i])/100000) *9.38660911282921877506715;
+//             Serial.println(scaled,5);
+//
+//
+//        }
+//        if (VarList[i]==0xE906)
+//        {
+//             scaled = (256000.0/AverageList[i]);
+//             Serial.println(scaled,5);
+//             Serial.println(AverageList[i],5);
+//             Serial.println(ScalingList[i],5);
+//             Serial.println(InNummeratorList[i],5);
+//        }
+//
+//        if(InNummeratorList[i])
+//        {
+//            scaled = AverageList[i]*ScalingList[i];
+//        }
+//        else
+//        {
+//            scaled = ScalingList[i]/AverageList[i];
+//        }
+//        Serial.println(scaled,5);
+//
+//         //---------end of scale with a scaling list-------------------
+//
+//
+//        MessageBodyVars+=String(scaled);
+//        MessageBodyVars+="}";
+//
+//        MessageBody+=MessageBodyVars;
+//        MessageBodyVars="";
+//        //MessageBodyValues+=(unsigned char)0xCA; //float32 itentifier
+//        //unsigned char MeasuredValue[]={0,0,0,0};
+//        //memcpy(MeasuredValue, (unsigned char*) (&AverageList[i]), 4);
+//        //MessageBodyValues+=MeasuredValue[3];
+//        //MessageBodyValues+=MeasuredValue[2];
+//        //MessageBodyValues+=MeasuredValue[1];
+//        //MessageBodyValues+=MeasuredValue[0];
+//    }
+//    Serial.print(MessageHeader);Serial.print(MessageBody);Serial.println("]}");
+//    String total = MessageHeader+MessageBody+"]}";
+//    Serial.println(total);
+//    delay(100);
+//    uint32_t freemem = System.freeMemory();
+//Serial.print("free memory: ");
+//Serial.println(freemem);
+//
+////updateTimer.stopFromISR();
+//    //this->httpPostRequest(total);
+//    PostBuffer = total;
+////updateTimer.startFromISR();
+//    //PostHttpp(MessageHeader+MessageBody+"]}","/Kisas/Post.php");
+//
+//    NumSamplesList[0]=0;
+//    NumSamplesList[1]=0;
+//    NumSamplesList[2]=0;
+//
+//    for(unsigned int i=0;i<sizeof(VarList);i++)
+//    {
+//        if (VarList[i]==0)
+//        {
+//            break;
+//        }
+//        NumSamplesList[i]=0;
+//    }
 }
 
 void TmAverage::addToVarList(uint16_t RegisterAdress)

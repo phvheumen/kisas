@@ -10,6 +10,7 @@
 #include "HttpClient.h"
 #include "math.h"
 #include <application.h>
+#include <string>
 
 #include "version.h"
 #include "pindefs.h"
@@ -20,6 +21,11 @@
 #include "utils.h"
 #include "Applications.h"
 #include "SdFat.h"
+
+/* Defines */
+#define PARTICLE_CLOUD_TO_MS	20000
+#define ENABLE_BOOT_MSG
+#define HTTP_REQUEST_TO_MS		5000
 
 /*
  * SYSTEM_MODE Macro to set system mode. See https://docs.particle.io/support/troubleshooting/mode-switching/electron/
@@ -38,9 +44,7 @@ ADE7880 * ade7880 = new ADE7880(&SPI, &Wire, SS_HSA, RESETINV, false);
 
 ApplicationManager * apps;
 
-/* Defines */
-#define PARTICLE_CLOUD_TO_MS	20000
-#define ENABLE_BOOT_MSG
+HttpClient * httpRequestService = new HttpClient(HTTP_REQUEST_TO_MS);
 
 /* MACROS */
 #ifdef ENABLE_BOOT_MSG
@@ -70,20 +74,6 @@ ADE7880 Measurement(&SPI, &Wire, SS_HSA, RESETINV, false); //TODO: Remove this o
 Timer particleConnectTimeOut(PARTICLE_CLOUD_TO_MS, particleConnectTimeOutCallback, true);
 String ossil = "0a-53a-104a-150a-190a-221a-243a-254a-254a-243a-221a-190a-150a-104a-53a0a53a104a150a190a221a243a254a254a243a221a190a150a104a53a0";
 String PostBuffer=""; //TODO: Remove this one
-
-// HttpClient
-unsigned int nextTime = 0;    // Next time to contact the server
-HttpClient _http;
-
-http_header_t _headers[] = {
-	{ "Content-Type", "application/json" },
-	{ "Accept" , "application/json" },
-    { "Accept" , "*/*"},
-    { NULL, NULL } // NOTE: Always terminate headers will NULL
-};
-
-http_request_t _request;
-http_response_t _response;
 
 /*
  * void setup()
@@ -169,6 +159,16 @@ void setup()
 	ade7880->measurement.setVoltageSensorGain(ADE7880Measurement::PHASE_A, 1.0f);
 
 	/*
+	 * Initialise HttpRequest service
+	 */
+	BOOT_MSG("Starting HTTP requests service");
+	httpRequestService->testRequest.hostname = "requestbin.net";
+	httpRequestService->testRequest.port = 80;
+	httpRequestService->testRequest.path = "/r/10f07gw1";
+	httpRequestService->testRequest.body = "Hello, world!";
+	httpRequestService->testRequest.method = HTTP_METHOD_POST;
+
+	/*
 	 * Initialising applications
 	 */
 	BOOT_MSG("Starting application manager");
@@ -181,16 +181,14 @@ void setup()
 	Serial.printlnf("");
 	Serial.printlnf("Free memory: %d Bytes", System.freeMemory());
 	Serial.printlnf("");
+
 }
 #pragma GCC pop_options
 
 void loop() {
-	if (nextTime > millis()) {
-		return;
-	}
-	apps->TimeAverage.httpPostRequest("Hello, world!");
 
-	nextTime = millis() + 2000;
+	httpRequestService->run();
+
 }
 
 void particleConnectTimeOutCallback(void)

@@ -40,4 +40,3 @@ bool ADE7880Setting::wattHourResetRead() {
 
 
 
-
