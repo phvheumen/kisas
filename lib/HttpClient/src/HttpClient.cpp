@@ -1,9 +1,9 @@
-#include "HttpClient.h"
-#include "Applications.h"
 #include <application.h>
 #include <string>
 
-static const uint16_t TIMEOUT = 5000; // Allow maximum 5s between data packets.
+#include "HttpClient.h"
+#include "Applications.h"
+#include "http_request.h"
 
 /**
 * Constructor.
@@ -11,6 +11,7 @@ static const uint16_t TIMEOUT = 5000; // Allow maximum 5s between data packets.
 HttpClient::HttpClient(uint16_t timeout)
 {
 	this->responseTimeoutMs = timeout;
+	this->max_queue_size = MAX_QUEUE_SIZE;
 }
 
 /**
@@ -54,9 +55,8 @@ void HttpClient::stateIdle(HttpClient * obj) {
 	/* State entry end */
 
 	/* State during */
-	if( ( !( obj->testRequest.ip == (uint32_t) 0 ) ||  obj->testRequest.hostname != "" ) && obj->testRequest.port != 0 ){
-		// If hostname or ip available start request
-		obj->stateMachineVariables.currentRequest = &obj->testRequest;
+	// When there are HTTP requests in the queue, start to process them
+	if( obj->http_q.size() > 0 ) {
 		obj->stateMachine.state_next = stateConnect;
 	}
 	/* State during end*/
@@ -77,12 +77,11 @@ void HttpClient::stateConnect(HttpClient * obj) {
 
 	/* State during */
 	do {
-		http_request_t * req = obj->stateMachineVariables.currentRequest;
-		if ( req->ip == (uint32_t) 0 ) {
-			APP_MSG_FORMATTED("HttpClient::stateConnect> Resolving hostname: %s", req->hostname.c_str());
+		if ( ( obj->http_q.front().ip == (uint32_t) 0 ) ) {
+			APP_MSG_FORMATTED("HttpClient::stateConnect> Resolving hostname: %s", obj->http_q.front().host.c_str());
 			// First start resolving hostname
-			req->ip = Cellular.resolve(req->hostname.c_str());
-			if(req->ip) {
+			obj->http_q.front().ip = Cellular.resolve(obj->http_q.front().host.c_str());
+			if( obj->http_q.front().ip ) {
 				// Hostname resolved!
 				APP_MSG("HttpClient::stateConnect> Hostname resolved");
 			} else {
@@ -92,8 +91,8 @@ void HttpClient::stateConnect(HttpClient * obj) {
 				break;
 			}
 		} else {
-			APP_MSG_FORMATTED("HttpClient::stateConnect> Connecting to: %s", req->ip.toString().c_str());
-			if( obj->client.connect(req->ip, req->port) ) {
+			APP_MSG_FORMATTED("HttpClient::stateConnect> Connecting to: %s", obj->http_q.front().ip.toString().c_str());
+			if( obj->client.connect(obj->http_q.front().ip, obj->http_q.front().port) ) {
 				// Connected, now its time to send HTTP request
 				APP_MSG("HttpClient::stateConnect> connected");
 				obj->stateMachine.state_next = stateTransmit;
@@ -104,8 +103,7 @@ void HttpClient::stateConnect(HttpClient * obj) {
 				break;
 			}
 		}
-	}
-	while(0);
+	} while(0);
 	/* State during end*/
 
 	/* State exit */
@@ -119,53 +117,18 @@ void HttpClient::stateTransmit(HttpClient * obj) {
 	/* State entry */
 	if ( obj->stateMachine.state_curr != obj->stateMachine.state_prev ) {
 		APP_MSG("HttpClient::stateTransmit> Entry");
-
-		obj->httpRequestString = "";
-		http_request_t * req = obj->stateMachineVariables.currentRequest;
-
-		obj->httpRequestString += req->method + " " + req->path + " HTTP/1.0\r\n";	// Send initial headers (only HTTP 1.0 is supported for now).
-		obj->httpRequestString += "Connection: close\r\n"; 						// Not supporting keep-alive for now.
-		if(req->hostname!=NULL) {
-			obj->httpRequestString += "HOST: " + req->hostname + "\r\n";
-		}
-		if (req->body != NULL) {
-			obj->httpRequestString += "Content-Length: " + String( (req->body).length() ) + "\r\n";
-		} else if (req->method == HTTP_METHOD_POST) { //Check to see if its a Post method.
-			obj->httpRequestString += "Content-Length: 0\r\n";
-		}
-
-// TODO: Add additional headers
-//	    if (headers != NULL)
-//	    {
-//	        int i = 0;
-//	        while (headers[i].header != NULL)
-//	        {
-//	            if (headers[i].value != NULL) {
-//	                this->httpRequestString += String(headers[i].header) + ": " + String(headers[i].value) + "\r\n";
-//	            } else {
-//	                this->httpRequestString += String(headers[i].header) + "\r\n";
-//	            }
-//	            i++;
-//	        }
-//	    }
-
-	    // Empty line to finish headers
-		obj->httpRequestString += "\r\n";
-		obj->httpRequestString += req->body;
-
-		APP_MSG_FORMATTED("HttpClient::stateTransmit> HTTP request: \r\n%s", obj->httpRequestString.c_str());
+		APP_MSG_FORMATTED("HttpClient::stateTransmit> HTTP request: \r\n%s", obj->http_q.front().request().c_str());
 	}
 	/* State entry end */
 
 	/* State during */
 	do {
-		uint16_t httpLength = obj->httpRequestString.length();
+		uint16_t httpRequestLen = obj->http_q.front().request().size();
 
-		if ( obj->client.write((uint8_t *) obj->httpRequestString.c_str(), httpLength) != httpLength ) {
+		if ( obj->client.write((uint8_t *) obj->http_q.front().request().c_str(), httpRequestLen) != httpRequestLen ) {
 			obj->stateMachine.state_next = stateError;
 			break;
 		} else {
-			obj->httpRequestString = "";
 			obj->stateMachine.state_next = stateWaitResponse;
 		}
 	} while (0);
@@ -202,31 +165,26 @@ void HttpClient::stateWaitResponse(HttpClient * obj) {
 		// Time out condition
 		obj->stateMachine.state_next = stateTimeout;
 	} else if ( !obj->client.connected() ) {
-		// Connection closed. An indicator for end of response
+		// Connection closed. An indicator for end of response.
+		// This is a real weakness for the system now.
+		// A bad server could keep the connection open for forever and also keep pushing bytes. Memory will overflow and particle craches.
 		obj->responseBuffer[bytesReceived] = '\0';
-		obj->httpResponseString = String((char *) obj->responseBuffer);
-		APP_MSG_FORMATTED("HttpClient::stateWaitResponse> Response: \r\n%s", obj->httpResponseString.c_str());
+		obj->http_q.front().addResponse(String((char *) obj->responseBuffer));
 
-		// Get status code in a not so elegant way
-		String statusCode = obj->httpResponseString.substring(9,12);
-		obj->testResponse.status = statusCode;
-		APP_MSG_FORMATTED("HttpClient::stateWaitResponse> Response code: %s", obj->testResponse.status.c_str());
+		APP_MSG_FORMATTED("HttpClient::stateWaitResponse> Response: \r\n%s", obj->http_q.front().response().c_str());
+		APP_MSG_FORMATTED("HttpClient::stateWaitResponse> Response code: %d", obj->http_q.front().responseStatus());
+		APP_MSG_FORMATTED("HttpClient::stateWaitResponse> Response body: %s", obj->http_q.front().responseBody().c_str());
 
-		// Get body
-		int bodyPos = obj->httpResponseString.indexOf("\r\n\r\n");
-		if (bodyPos == -1) {
-			APP_MSG("HttpClient::stateWaitResponse> No response body");
-		} else {
-			obj->testResponse.body = "";
-			obj->testResponse.body += obj->httpResponseString.substring(bodyPos+4);
-		}
-
-		if (obj->testResponse.status == String("200")) {
+		if( obj->http_q.front().responseStatus() == 200 ) {
+			// OK
 			obj->stateMachine.state_next = stateDone;
+		} else if( obj->http_q.front().responseStatus() == 0 ) {
+			// Response could not be parsed
+			obj->stateMachine.state_next = stateError;
 		} else {
+			// Response NOT OK
 			obj->stateMachine.state_next = stateError;
 		}
-
 	}
 
 	/* State during end*/
@@ -265,6 +223,9 @@ void HttpClient::stateDone(HttpClient * obj) {
 	/* State entry end */
 
 	/* State during */
+	// Pop processed request from the queue and go back to stateIdle
+	obj->http_q.pop();
+	obj->stateMachine.state_next = stateIdle;
 
 	/* State during end*/
 
@@ -293,7 +254,18 @@ void HttpClient::stateError(HttpClient * obj) {
 	/* State exit end */
 }
 
-bool HttpClient::sendRequest(http_callback_func * callback) {
-
-	return true;
+/**
+ * Add an HTTP request to the HTTP request service queue
+ * This method is probably not thread safe.
+ *
+ * @param r The HTTP request object
+ * @return True if added successfully to the queue, False if queue is full.
+ */
+bool HttpClient::pushRequest(HTTP_Request& r) {
+	if( this->http_q.size() >= this->max_queue_size ) {
+		return false;
+	} else {
+		this->http_q.push(r);
+		return true;
+	}
 }
