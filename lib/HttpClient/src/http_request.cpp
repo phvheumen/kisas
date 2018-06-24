@@ -40,12 +40,14 @@ HTTP_Request::HTTP_Request() {
 	httpResponseString = "";
 	statusCode = 0;
 	httpResponseBody = "";
+	callback = nullptr;
 }
 
 HTTP_Request::HTTP_Request(const char* host, uint16_t port, const char* method, const char* URI, http_header_field_T header_fields[], const char* body) {
 	// Host information
 	this->host = host;
 	this->port = port;
+	this->callback = nullptr;
 
 	// Construct request line
 	const int HTTP_METHODS_size = sizeof(HTTP_METHODS)/sizeof(HTTP_METHODS[0]);

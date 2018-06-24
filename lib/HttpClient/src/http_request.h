@@ -26,9 +26,16 @@ typedef struct http_header_field {
 
 class HTTP_Request {
 public:
+	typedef std::function<void(HTTP_Request&)> http_request_callback_fn;
+
     HTTP_Request();
     HTTP_Request(const char* host, uint16_t port, const char* method, const char* URI, http_header_field_T header_fields[], const char* body);
     ~HTTP_Request();
+
+    void addCallback(http_request_callback_fn callback_) { callback = std::move(callback_); }
+
+    template <typename T>
+    void addCallback(void (T::*fun)(HTTP_Request&), T& instance) { addCallback(std::bind(fun, &instance, std::placeholders::_1)); }
 
     std::string request() { return httpRequestString; }
     std::string response() { return httpResponseString; }
@@ -48,6 +55,8 @@ private:
     void parseResponse(void);
     int statusCode;
     std::string httpResponseBody;
+
+    http_request_callback_fn callback;
 };
 
 #endif /* _HTTP_REQUEST_H_ */
