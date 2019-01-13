@@ -36,6 +36,9 @@ class Application
 public:
 	Application(unsigned int systemID, unsigned int applicationID, unsigned int messageFormatID,  ApplicationManager* AppManPtr);
     Application(String systemID, String applicationID, String messageFormatID, ApplicationManager* AppManPtr);
+    Application(unsigned int systemID, unsigned int applicationID, unsigned int messageFormatID,  ApplicationManager* AppManPtr, HttpClient* httpClientService);
+    Application(String systemID, String applicationID, String messageFormatID, ApplicationManager* AppManPtr,  HttpClient* httpClientService);
+
 
     // The following constructors will be removed in the near future
     Application();
@@ -53,6 +56,7 @@ protected:
 	String messageFormatID; // Identify the message format. In this way the overhead of sending field names can be avoided
 
 	ApplicationManager* appManager; // Pointer to application manager, useful for inter-application communication
+	HttpClient* httpClientService;
 private:
 
 };
@@ -61,7 +65,8 @@ private:
 class PeriodicCall: public Application
 {
 public:
-	PeriodicCall(ApplicationManager * _Manager);
+	PeriodicCall(ApplicationManager* _Manager);
+	PeriodicCall(ApplicationManager* _Manager, HttpClient* _httpClientService);
 	~PeriodicCall();
 
 	void init(void);
@@ -142,11 +147,13 @@ class ApplicationManager
 {
 public:
 	ApplicationManager();
+	ApplicationManager(HttpClient* _httpClientService);
 	~ApplicationManager();
 
-	TmAverage TimeAverage;
+
+//	TmAverage TimeAverage;
 	PeriodicCall PerCall;
-	//SmplScope SimpleScope;
+//	SmplScope SimpleScope;
 
 	void parseSetting(float * SettingsArr, int Length);
 private:

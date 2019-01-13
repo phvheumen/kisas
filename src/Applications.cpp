@@ -15,6 +15,7 @@ Application::Application() {
 	this->applicationID = String(0);
 	this->messageFormatID = String(0);
 	this->appManager = nullptr;
+	this->httpClientService = nullptr;
 
 	APP_MSG("Application> Warning: Constructor with no arguments called")
 	this->printApplicationInstance();
@@ -25,6 +26,7 @@ Application::Application(String systemID, String applicationID, String messageFo
 	this->applicationID = applicationID;
 	this->messageFormatID = messageFormatID;
 	this->appManager = nullptr;
+	this->httpClientService = nullptr;
 
 	this->printApplicationInstance();
 }
@@ -34,6 +36,7 @@ Application::Application(unsigned int systemID, unsigned int applicationID, unsi
 	this->applicationID = String(applicationID);
 	this->messageFormatID = String(messageFormatID);
 	this->appManager = nullptr;
+	this->httpClientService = nullptr;
 
 	this->printApplicationInstance();
 }
@@ -43,6 +46,7 @@ Application::Application(unsigned int systemID, unsigned int applicationID, unsi
 	this->applicationID = String(applicationID);
 	this->messageFormatID = String(messageFormatID);
 	this->appManager = AppManPtr;
+	this->httpClientService = nullptr;
 
 	this->printApplicationInstance();
 }
@@ -52,6 +56,27 @@ Application::Application(String systemID, String applicationID, String messageFo
 	this->applicationID = String(applicationID);
 	this->messageFormatID = String(messageFormatID);
 	this->appManager = AppManPtr;
+	this->httpClientService = nullptr;
+
+	this->printApplicationInstance();
+}
+
+Application::Application(unsigned int systemID, unsigned int applicationID, unsigned int messageFormatID,  ApplicationManager* AppManPtr, HttpClient* httpClientService) {
+	this->systemID = String(systemID);
+	this->applicationID = String(applicationID);
+	this->messageFormatID = String(messageFormatID);
+	this->appManager = AppManPtr;
+	this->httpClientService = httpClientService;
+
+	this->printApplicationInstance();
+}
+
+Application::Application(String systemID, String applicationID, String messageFormatID, ApplicationManager* AppManPtr,  HttpClient* httpClientService) {
+	this->systemID = String(systemID);
+	this->applicationID = String(applicationID);
+	this->messageFormatID = String(messageFormatID);
+	this->appManager = AppManPtr;
+	this->httpClientService = httpClientService;
 
 	this->printApplicationInstance();
 }
@@ -70,10 +95,16 @@ Application::~Application() {
 // CLASS APPLICATIONMANAGER
 //
 ApplicationManager::ApplicationManager() :
-		TimeAverage(this),
+//		TimeAverage(this),
 		PerCall(this)
 {
 	APP_MSG("ApplicationManger> Started");
+}
+
+ApplicationManager::ApplicationManager(HttpClient* _httpClientService) :
+		PerCall(this, _httpClientService)
+{
+
 }
 
 ApplicationManager::~ApplicationManager() {
@@ -90,6 +121,12 @@ PeriodicCall::PeriodicCall(ApplicationManager * _Manager):
 
 }
 
+PeriodicCall::PeriodicCall(ApplicationManager * _Manager, HttpClient* _httpClientService) :
+		PeriodicCall(_Manager)
+{
+		httpClientService = _httpClientService;
+}
+
 PeriodicCall::~PeriodicCall() {
 
 }
@@ -98,11 +135,24 @@ void PeriodicCall::init(void) {
 	this->periodicCallTimer.start();
 }
 void PeriodicCall::run(void) {
-	APP_MSG("PeriodicCall::run()");
+	APP_MSG("PeriodicCall::run> Entry");
+
+	http_header_field_T header_fields[] = {
+			{"User-Agent",  "Mozilla/5.0"},
+			{nullptr, nullptr}
+	};
+
+	HTTP_Request http_req = HTTP_Request("requestbin.net", 80, HTTP_METHOD_POST, "/r/13amhyo1", header_fields, "Hello, world!");
+//	http_req.addCallback(&PeriodicCall::httpRequestCallback, *this);
+	httpClientService->pushRequest(http_req);
+
+	APP_MSG("PeriodicCall::run> Exit");
 }
 
 void PeriodicCall::httpRequestCallback(HTTP_Request& r) {
+	APP_MSG("PeriodicCall::httpRequestCallback> Entry");
 
+	APP_MSG("PeriodicCall::httpRequestCallback> Exit");
 }
 
 
@@ -529,7 +579,7 @@ void ApplicationManager::parseSetting(float * SettingsArr, int Length)
     if(SettingsArr[2] == 2 && SettingsArr[3] == 10) // Application: TimeAverage
 	{
 	    //this->TimeAverage.parseSetting(SettingsArr,Length);
-	    TimeAverage.parseSetting(SettingsArr,Length);
+//	    TimeAverage.parseSetting(SettingsArr,Length);
 	    Serial.println("ApplicationManager.parseSetting>\t to TimeAverage <-- broken");
 	}
 	if(SettingsArr[2] == 2 && SettingsArr[3] == 11) // Application: SimpleScope

@@ -10,7 +10,6 @@
 #include "HttpClient.h"
 #include "math.h"
 #include <application.h>
-#include <string>
 
 #include "version.h"
 #include "pindefs.h"
@@ -42,9 +41,10 @@ SYSTEM_MODE(SEMI_AUTOMATIC);
 //ADE7880 * ade7880 = new ADE7880(&Wire, RESETINV, true);
 ADE7880 * ade7880 = new ADE7880(&SPI, &Wire, SS_HSA, RESETINV, false);
 
-ApplicationManager * apps;
+ApplicationManager* apps;
 
-HttpClient * httpRequestService = new HttpClient(HTTP_REQUEST_TO_MS);
+//HttpClient * httpRequestService = new HttpClient(HTTP_REQUEST_TO_MS);
+HttpClient * httpRequestService = new HttpClient();
 
 /* MACROS */
 #ifdef ENABLE_BOOT_MSG
@@ -162,19 +162,25 @@ void setup()
 	 * Initialise HttpRequest service
 	 */
 	BOOT_MSG("Starting HTTP requests service");
-	httpRequestService->testRequest.hostname = "requestbin.net";
-	httpRequestService->testRequest.port = 80;
-	httpRequestService->testRequest.path = "/r/10f07gw1";
-	httpRequestService->testRequest.body = "Hello, world!";
-	httpRequestService->testRequest.method = HTTP_METHOD_POST;
+
+//	http_header_field_T header_fields[] = {
+//			{"User-Agent",  "Mozilla/5.0"},
+//			{nullptr, nullptr}
+//	};
+//	HTTP_Request http_req = HTTP_Request("requestbin.net", 80, HTTP_METHOD_POST, "/r/13amhyo1", header_fields, "Hello, world!");
+//	http_req.addCallback(&PeriodicCall::httpRequestCallback, apps->PerCall);
+//	httpRequestService->pushRequest(http_req);
 
 	/*
 	 * Initialising applications
 	 */
 	BOOT_MSG("Starting application manager");
-	apps = new ApplicationManager;
-	apps->TimeAverage.setHttpHost("requestbin.net", "/r/1l9mawu1", 80);
+	apps = new ApplicationManager(httpRequestService);
+	apps->PerCall.init();
+//	apps->TimeAverage.setHttpHost("requestbin.net", "/r/1l9mawu1", 80);
 //	apps->TimeAverage.init();
+
+
 
 	BOOT_MSG("Boot complete");
 
