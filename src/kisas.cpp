@@ -193,6 +193,12 @@ void setup()
 
 void loop() {
 
+	/* Bug: currently the problem is that sometimes the particle goes into a hard fault state.
+	 * This is probably because of httpRequestService->run(); tries to acces a object that does not exist anymore.
+	 * This can happen because the periodicTimer callback is creating this object and is destroyed as soon the callback returns.
+	 * To fix this problem, the lifetime of the object should continue even when the callback is done.
+	 * C++ experience is required to solve this problem.
+	 */
 	httpRequestService->run();
 
 }
